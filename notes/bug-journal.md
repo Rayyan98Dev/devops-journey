@@ -14,6 +14,11 @@ Format: symptom, cause, fix.
   - Cause: a new file has no `x` bit, and `./script` needs it. `bash hello.sh` only needs read permission.
   - Fix: `chmod 755 hello.sh` (or `chmod u+x hello.sh`).
 
+* **`2>&1 > out.txt` put the error on the screen, not in the file** (got this one wrong twice)
+  - Symptom: the error showed on screen even though I redirected to a file.
+  - Cause: redirections run left to right, and `2>&1` copies where stdout points *at that moment*. Here stdout still pointed at the screen.
+  - Fix: `> out.txt 2>&1`. Move stdout first, then copy it.
+
 ## Python
 
 * **Argument count one too high**
@@ -60,3 +65,25 @@ Format: symptom, cause, fix.
   - Symptom: a `TypeError` when assigning to an item.
   - Cause: `(3, 4)` is a tuple, which can't be changed once made. I thought it was a list.
   - Fix: build a new tuple, or use a list (`[3, 4]`) if it has to change.
+
+## Git
+
+* **`origin/main` didn't move when I committed**
+  - Symptom: I expected `git status` to say "up to date" after a local commit. It said "ahead of 'origin/main' by 1 commit".
+  - Cause: `origin/main` is a local bookmark of where the remote's `main` was at the last push or fetch. It only moves then.
+  - Fix: nothing is broken. `git push` updates it, `git fetch` refreshes it, and `git log origin/main..` lists unpushed commits.
+
+* **Expected `git merge scratch` to make a new commit, but it fast-forwarded**
+  - Symptom: no new commit, just `Fast-forward`.
+  - Cause: `main` had nothing the other branch lacked, so Git only moved the `main` label forward.
+  - Fix: a merge commit with two parents only appears when both branches have new commits. Check with `git log --oneline --graph --all`.
+
+* **`git push` rejected with "(fetch first)"**
+  - Symptom: `! [rejected] main -> main (fetch first)`.
+  - Cause: the remote had a commit I didn't have. A push is only accepted if the remote's tip is already in my history.
+  - Fix: `git fetch`, then `git merge origin/main` (or `git pull`), then `git push`.
+
+* **`git log --online` and `git HEAD`**
+  - Symptom: `fatal: unrecognized argument: --online`, and `'HEAD' is not a git command`.
+  - Cause: a typo (`--oneline`), and `HEAD` is a pointer, not a command.
+  - Fix: `git log --oneline`, and `cat .git/HEAD` (or `git rev-parse HEAD`) to look at it.
