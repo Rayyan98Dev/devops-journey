@@ -1,4 +1,4 @@
-# devops-notes
+# devops-journey
 
 Notes and automation scripts from my DevOps study plan (Linux, Bash, Git, networking, Docker, CI/CD, AWS, Kubernetes).
 
