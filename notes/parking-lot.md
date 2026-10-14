@@ -9,9 +9,9 @@ One line per tangent. Friday slot: explore the best two.
 - `requests` in more depth: headers, authentication, POST, retries, paging. Building my own API is a separate topic for later.
 - Setting permissions from Python: `os.chmod(path, 0o755)`. Why the `0o` prefix? (Plain `755` would be read as decimal.) Try it on `hello.sh`.
 - Getting better at reading technical docs: the `requests` reference page was hard to use. Reference docs say what exists, tutorials say how to use it. Find good sources for each, and test any answer by experiment.
-- Detached `HEAD`: what is it, and when does Git put me in that state?
-- `git reflog`: what happens to commits that no branch points to, and how long can I still rescue them?
 - `git.autofetch` in VSCodium: is it on, and what does it change? (It updates `origin/main` in the background, but doesn't fix a divergence.)
+- Packet can't run in the background or start at login on Sway (no background portal for Flatpaks). Try starting it from the Sway config with an `exec` line; check the right command first.
+- `ssh` is allowed in the `public` firewall zone. Is `sshd` actually running? If not needed, remove `ssh` from `public`. (Fits the systemd day.)
 
 ## Answered
 
@@ -22,3 +22,5 @@ One line per tangent. Friday slot: explore the best two.
 - Would 15 branches of 1 GB take 15 GB? (Mon 12 Oct) No. A branch is a tiny file holding one hash, and Git stores each file version once. Big binary files are what make a repo grow.
 - What is `origin/main` for? (Mon 12 Oct) A local bookmark of the remote's `main`, updated only on push or fetch. It's used to compare with `git status` ("ahead", "behind", "diverged") and `git log origin/main..`, and it makes `pull` safe to split into a fetch and a merge.
 - Why does `git push` need a fetch first, and why not auto-fetch? (Mon 12 Oct) The remote refuses a push that would lose commits, since its tip must already be in my history. A fetch alone wouldn't fix it, because someone still has to combine the two histories.
+- Detached `HEAD`? (Tue 13 Oct) `HEAD` points straight at a commit instead of a branch. Git does this during a rebase while it replays commits one at a time, then moves the branch label and re-attaches `HEAD` at the end. `git branch` shows `(no branch, rebasing ...)`.
+- What happens to commits no branch points to? (Tue 13 Oct) They stay in Git's storage for weeks (roughly 30-90 days by default). `git reflog` lists where my labels used to point (local only), and `git branch <name> <hash>` rescues one.
