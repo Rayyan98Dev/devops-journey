@@ -1,0 +1,9 @@
+[Unit]
+Description=Heartbeat demo service
+
+[Service]
+ExecStart=%h/devops-journey/scripts/heartbeat.sh
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
