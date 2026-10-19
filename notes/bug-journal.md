@@ -87,3 +87,9 @@ Format: symptom, cause, fix.
   - Symptom: `fatal: unrecognized argument: --online`, and `'HEAD' is not a git command`.
   - Cause: a typo (`--oneline`), and `HEAD` is a pointer, not a command.
   - Fix: `git log --oneline`, and `cat .git/HEAD` (or `git rev-parse HEAD`) to look at it.
+
+## Docker
+* **Phone reached a container port I never opened**
+  - Symptom: `-p 8080:80` nginx loaded on my phone, but 8080 isn't open in my firewall zone.
+  - Cause: Docker writes its own firewall rules that run before firewalld's zones, and `-p 8080:80` listens on `0.0.0.0` (every connection).
+  - Fix: `-p 127.0.0.1:8080:80` to listen only on the laptop; check the `PORTS` column in `docker ps`.
