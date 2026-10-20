@@ -93,3 +93,8 @@ Format: symptom, cause, fix.
   - Symptom: `-p 8080:80` nginx loaded on my phone, but 8080 isn't open in my firewall zone.
   - Cause: Docker writes its own firewall rules that run before firewalld's zones, and `-p 8080:80` listens on `0.0.0.0` (every connection).
   - Fix: `-p 127.0.0.1:8080:80` to listen only on the laptop; check the `PORTS` column in `docker ps`.
+
+  * **"file with no instructions" on docker build**
+  - Symptom: build failed straight away, showing only empty lines.
+  - Cause: the Dockerfile on disk was empty lines; the text in VSCodium was never saved.
+  - Fix: write it with a flush-left heredoc, check with `cat -A Dockerfile`.
