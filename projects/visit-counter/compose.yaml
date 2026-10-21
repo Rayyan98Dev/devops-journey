@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    init: true
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - redis
+  redis:
+    image: redis:7
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

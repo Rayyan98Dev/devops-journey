@@ -94,7 +94,14 @@ Format: symptom, cause, fix.
   - Cause: Docker writes its own firewall rules that run before firewalld's zones, and `-p 8080:80` listens on `0.0.0.0` (every connection).
   - Fix: `-p 127.0.0.1:8080:80` to listen only on the laptop; check the `PORTS` column in `docker ps`.
 
-  * **"file with no instructions" on docker build**
+* **"file with no instructions" on docker build**
   - Symptom: build failed straight away, showing only empty lines.
   - Cause: the Dockerfile on disk was empty lines; the text in VSCodium was never saved.
   - Fix: write it with a flush-left heredoc, check with `cat -A Dockerfile`.
+
+* **"The slow stop (bug)"**
+  - Symptom: `docker compose down` took 10.2 s for `app` but 0.1 s for Redis.
+  - Cause: `app` was PID 1 in its container, and PID 1 ignores `SIGTERM` unless it has a handler for it. Docker sends `SIGTERM`, waits 10 s, then sends `SIGKILL`.
+  - Fix: `init: true` in `compose.yaml` makes a tiny init program PID 1.
+    - **Check:** the init program (Docker uses `tini`) receives `SIGTERM` and forwards it to my app. My app is no longer PID 1, so it stops normally. After the fix: 0.2 s.
+  - The `up -d` after the change still took 10.6 s, because Compose first stopped the old container, the one without `init`.
