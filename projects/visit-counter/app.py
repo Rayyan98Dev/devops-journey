@@ -10,5 +10,9 @@ def index():
     count = r.incr("visits")
     return f"Hello from Catto! This page has been visited {count} times.\n"
 
+@app.route("/health")
+def health():
+    return ("Working fine", 200)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
