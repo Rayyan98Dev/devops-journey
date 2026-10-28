@@ -115,3 +115,8 @@ Format: symptom, cause, fix.
   - Symptom: I looked for a healthcheck tool in the `inspect` output and it wasn't there.
   - Cause: `inspect` shows how an image *runs* (CMD, env, ports), not the files inside it.
   - Fix: `sudo docker run --rm redis:7 ls /usr/local/bin` lists the programs; `docker history --no-trunc` shows how it was built.
+
+* **First `docker push` to GHCR ended in `denied` after uploading the layers**
+  - Symptom: every layer showed `Pushed`, then `error from registry: denied`. Pushing a second tag worked, and so did a retry of the first.
+  - Cause: not confirmed. Probably a one-time failure while GHCR created the package on its first push.
+  - Fix: push again. Check with `docker pull` of each tag that the registry has the manifest. Layers alone can't be pulled.
