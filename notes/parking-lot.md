@@ -14,6 +14,8 @@ One line per tangent. Friday slot: explore the best two.
 - Rootless Docker: daemon runs as me, so containers can only touch my own files. Set up Fri 23 Oct; check how it affects kind (Weeks 8-9).
 - Limiting *who* can reach a published port (not just which address): Docker's rules skip the firewalld zones, so look at the `DOCKER-USER` chain, binding to a VPN address, and nginx `allow`/`deny`.
 - Safe remote access: SSH from a library, or Jellyfin from another house, without opening ports to everyone. Look at a private VPN (WireGuard or Tailscale), SSH keys only (no passwords, no root login), and a reverse proxy with HTTPS and a login.
+- Shallow vs deep healthchecks (27 Oct): shallow = "is the process alive and answering?"; deep = "can it do its real job, including its dependencies?" A deep `/health` would ping Redis and fail when Redis is down. Tradeoff: one Redis outage turns web `unhealthy` too.
+- `/health` must not count visits (27 Oct): the web healthcheck hits its own route, because `/` increments the counter every time Docker checks.
 - After Week 4: "build your own container" from the `build-your-own-x` repo (Docker section), to see what containers really are underneath.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
 

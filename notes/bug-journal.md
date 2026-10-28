@@ -105,3 +105,13 @@ Format: symptom, cause, fix.
   - Fix: `init: true` in `compose.yaml` makes a tiny init program PID 1.
     - **Check:** the init program (Docker uses `tini`) receives `SIGTERM` and forwards it to my app. My app is no longer PID 1, so it stops normally. After the fix: 0.2 s.
   - The `up -d` after the change still took 10.6 s, because Compose first stopped the old container, the one without `init`.
+
+* **`invalid reference format` when tagging for GHCR**
+  - Symptom: `docker tag web:0.1.1 ghcr.io/Rayyan98Dev/web:0.1.1` failed with `repository name must be lowercase`.
+  - Cause: image references must be all lowercase, and my GitHub username has capitals.
+  - Fix: `ghcr.io/rayyan98dev/web:0.1.1`. GitHub isn't case sensitive, so it still points at my account.
+
+* **`redis-cli` wasn't in the `docker image inspect` output**
+  - Symptom: I looked for a healthcheck tool in the `inspect` output and it wasn't there.
+  - Cause: `inspect` shows how an image *runs* (CMD, env, ports), not the files inside it.
+  - Fix: `sudo docker run --rm redis:7 ls /usr/local/bin` lists the programs; `docker history --no-trunc` shows how it was built.
