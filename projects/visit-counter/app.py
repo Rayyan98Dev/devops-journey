@@ -14,5 +14,12 @@ def index():
 def health():
     return ("Working fine", 200)
 
+def sec():
+    with open("/run/secrets/api_key") as secrets:
+        key = secrets.read()
+        key = key.strip()
+        app.logger.warning("API key loaded (%d chars)", len(key))
+
 if __name__ == "__main__":
+    sec()
     app.run(host="0.0.0.0", port=8000)

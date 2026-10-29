@@ -120,3 +120,13 @@ Format: symptom, cause, fix.
   - Symptom: every layer showed `Pushed`, then `error from registry: denied`. Pushing a second tag worked, and so did a retry of the first.
   - Cause: not confirmed. Probably a one-time failure while GHCR created the package on its first push.
   - Fix: push again. Check with `docker pull` of each tag that the registry has the manifest. Layers alone can't be pulled.
+
+* **New route returned 404 after I added it to `app.py`**
+  - Symptom: `curl /sec` gave 404 even though the route was in my file.
+  - Cause: `app.py` is copied into the image at build time. `docker compose up -d` reused the old image, which had no such route.
+  - Fix: `docker compose up -d --build`. Check with `docker compose exec app grep -n sec /app/app.py`.
+
+* **`FileNotFoundError: 'run/secrets/api_key'`**
+  - Symptom: a 500 and a traceback when the code opened the secret.
+  - Cause: the path had no leading `/`, so Python looked inside the working directory (`/app/run/secrets/...`).
+  - Fix: `/run/secrets/api_key`. A path that means "from the root of the container" starts with `/`.

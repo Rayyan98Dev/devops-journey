@@ -3,13 +3,15 @@ services:
     build: .
     init: true
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${HOST_PORT}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
-      timeout: 10s
+      timeout: 3s
       retries: 3
       start_period: 5s
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
     depends_on:
       redis:
           condition: service_healthy
@@ -22,6 +24,8 @@ services:
       - no-new-privileges:true
     mem_limit: 256m
     pids_limit: 100
+    secrets:
+      - api_key
   redis:
     image: redis:7
     healthcheck:
@@ -42,3 +46,7 @@ services:
 
 volumes:
   redis-data:
+
+secrets:
+  api_key:
+    file: ./secrets/api_key.txt

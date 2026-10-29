@@ -17,6 +17,11 @@ One line per tangent. Friday slot: explore the best two.
 - Shallow vs deep healthchecks (27 Oct): shallow = "is the process alive and answering?"; deep = "can it do its real job, including its dependencies?" A deep `/health` would ping Redis and fail when Redis is down. Tradeoff: one Redis outage turns web `unhealthy` too.
 - `/health` must not count visits (27 Oct): the web healthcheck hits its own route, because `/` increments the counter every time Docker checks.
 - Friendlier 404 page in Flask (28 Oct): `@app.errorhandler(404)` can return a custom page, but it must still send status 404 so checks and clients see the real error.
+- Redis client timeout (29 Oct): `redis.Redis(..., socket_connect_timeout=2)` so a wrong host fails in 2 seconds instead of retrying slowly.
+- `.env.example` (29 Oct): commit one with the same keys and safe values, so a fresh clone works while the real `.env` stays ignored.
+- `sec()` (29 Oct): rename to `load_api_key`. It only runs under `if __name__ == "__main__"`, so a production server (Week 5) would skip it and never load the key.
+- Redis password (29 Oct): `requirepass` from a Compose secret, and a healthcheck that uses it (needs `CMD-SHELL`). Skipped as the stretch goal.
+- Secret file permissions (29 Oct): `chmod 600` on the host vs the container user (uid 10001) reading it. See Kubernetes secrets in Week 8.
 - After Week 4: "build your own container" from the `build-your-own-x` repo (Docker section), to see what containers really are underneath.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
 

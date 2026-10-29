@@ -1,2 +1,4 @@
 reports/
 notes/temp.md
+secrets/
+.env
