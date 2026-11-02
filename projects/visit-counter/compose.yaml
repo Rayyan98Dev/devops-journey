@@ -10,6 +10,8 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+    env_file:
+      - app.env
     environment:
       REDIS_HOST: ${REDIS_HOST}
     depends_on:
