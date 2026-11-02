@@ -22,6 +22,11 @@ One line per tangent. Friday slot: explore the best two.
 - `sec()` (29 Oct): rename to `load_api_key`. It only runs under `if __name__ == "__main__"`, so a production server (Week 5) would skip it and never load the key.
 - Redis password (29 Oct): `requirepass` from a Compose secret, and a healthcheck that uses it (needs `CMD-SHELL`). Skipped as the stretch goal.
 - Secret file permissions (29 Oct): `chmod 600` on the host vs the container user (uid 10001) reading it. See Kubernetes secrets in Week 8.
+- `start_interval` (30 Oct): check the Compose docs for a faster check rate during `start_period`, so a slow starter goes healthy sooner. Then add a README to `pg-health` and decide whether it stays in `projects/` or moves to `docker-labs`.
+- Make a step run even after a failure (2 Nov): `if: always()`, and what `continue-on-error: true` does.
+- Cache pip in the workflow (2 Nov): `setup-python` has a `cache: pip` option, so the install step is faster.
+- Better names (2 Nov): rename `simple-job` and `devops-journey-workflow` to what they do, and clean the `ls` and Python-version steps out of the workflow once I don't need them.
+- Test on more than one Python (2 Nov): a matrix, for example 3.12 and 3.14.
 - After Week 4: "build your own container" from the `build-your-own-x` repo (Docker section), to see what containers really are underneath.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
 

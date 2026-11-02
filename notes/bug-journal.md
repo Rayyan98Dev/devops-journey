@@ -130,3 +130,30 @@ Format: symptom, cause, fix.
   - Symptom: a 500 and a traceback when the code opened the secret.
   - Cause: the path had no leading `/`, so Python looked inside the working directory (`/app/run/secrets/...`).
   - Fix: `/run/secrets/api_key`. A path that means "from the root of the container" starts with `/`.
+
+## CI (GitHub Actions)
+
+* **`name` and `run` written as two list items**
+  - Symptom: the workflow had a step with a name and no command, and another with a command and no name.
+  - Cause: in a YAML list each `-` starts a new item, so `- name:` and `- run:` became two separate steps.
+  - Fix: one item, one dash: `- name: ...` then `  run: ...` indented under it.
+
+* **Plain `pytest` found no tests (`collected 0 items`)**
+  - Symptom: `no tests ran`; I ran `pytest test.py` by name and it worked.
+  - Cause: pytest only collects files named `test_*.py` or `*_test.py`. `test.py` matches neither.
+  - Fix: rename to `test_app.py`.
+
+* **CI failed with exit code 5 after I pushed the workflow**
+  - Symptom: `collected 0 items`, `Error: Process completed with exit code 5`, though the test passed on my laptop.
+  - Cause: I pushed `ci.yml` but not `test_app.py`. The runner had only what I pushed.
+  - Fix: add the file and push. Read `git status` before adding, and add by name.
+
+* **`source .venv/bin/activate` in its own step did nothing**
+  - Symptom: no error, but the next step didn't use the venv.
+  - Cause: each `run:` step is a new shell, so the activation is forgotten. A runner is already throwaway, so a venv isn't needed.
+  - Fix: delete the venv steps, and use `setup-python` to pin the version.
+
+* **`with:` under the job and `python-version:3.12`**
+  - Symptom: invalid workflow, and no `setup-python` step existed.
+  - Cause: `with:` is the input of one `uses:` step, not a job setting, and `key:value` needs a space after the colon.
+  - Fix: a `- uses: actions/setup-python@...` step with `with:` under it, `python-version: "3.12"`.
