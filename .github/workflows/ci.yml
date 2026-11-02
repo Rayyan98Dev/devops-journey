@@ -1,0 +1,11 @@
+name: devops-journey-workflow
+on: push
+jobs:
+    simple-job:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7.0.1
+            - name: show-files-directories
+              run: ls
+            - name: show-python-version
+              run: python3 --version
