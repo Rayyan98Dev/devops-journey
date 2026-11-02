@@ -6,6 +6,6 @@ jobs:
         steps:
             - uses: actions/checkout@v7.0.1
             - name: show-files-directories
-              run: ls
+              run: lss
             - name: show-python-version
               run: python3 --version
