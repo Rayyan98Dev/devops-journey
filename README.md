@@ -58,5 +58,3 @@ Note: GitHub allows 60 unauthenticated requests per hour per IP address. If you 
 
 ## Notes
 Daily study notes are in `notes/`.
-
-This is a test from github actions from a different branch.
