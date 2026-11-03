@@ -157,3 +157,4 @@ Format: symptom, cause, fix.
   - Symptom: invalid workflow, and no `setup-python` step existed.
   - Cause: `with:` is the input of one `uses:` step, not a job setting, and `key:value` needs a space after the colon.
   - Fix: a `- uses: actions/setup-python@...` step with `with:` under it, `python-version: "3.12"`.
+
