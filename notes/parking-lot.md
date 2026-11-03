@@ -27,6 +27,11 @@ One line per tangent. Friday slot: explore the best two.
 - Cache pip in the workflow (2 Nov): `setup-python` has a `cache: pip` option, so the install step is faster.
 - Better names (2 Nov): rename `simple-job` and `devops-journey-workflow` to what they do, and clean the `ls` and Python-version steps out of the workflow once I don't need them.
 - Test on more than one Python (2 Nov): a matrix, for example 3.12 and 3.14.
+- Renaming the job (3 Nov): when I give `simple-job` a better name, the ruleset must change in the same PR, or `main` gets stuck waiting for a check that never reports.
+- `push.autoSetupRemote` (3 Nov): a Git setting that makes plain `git push` create and link a new branch, so no `-u` is needed. Is it worth it, or is `-u` a better habit while I learn?
+- Other ruleset options (3 Nov): "require branches to be up to date before merging", requiring approvals (pointless alone), and "require linear history". What does each change, and which would a team turn on?
+- Merge button choices (3 Nov): merge commit vs squash vs rebase. How do they change the history `git log --graph` shows?
+- `paths:` filter for a workflow (3 Nov): run CI only when code changes, not for a notes-only PR. But a skipped required check can block the merge, so check how GitHub treats it.
 - After Week 4: "build your own container" from the `build-your-own-x` repo (Docker section), to see what containers really are underneath.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
 

@@ -158,3 +158,22 @@ Format: symptom, cause, fix.
   - Cause: `with:` is the input of one `uses:` step, not a job setting, and `key:value` needs a space after the colon.
   - Fix: a `- uses: actions/setup-python@...` step with `with:` under it, `python-version: "3.12"`.
 
+* **A PR started no CI run, and the check said `(push)`**
+  - Symptom: the first PR showed no pull-request checks, and the check name ended in `(push)`.
+  - Cause: I had added `pull_request:` to `ci.yml` on my laptop but never pushed it. GitHub reads the workflow from the pushed commit.
+  - Fix: push the file. Read the word in brackets after the check name: it says which trigger ran.
+
+* **Ruleset created, but the merge button still worked**
+  - Symptom: a required `simple-job` check was failing, and PR #2 could still be merged.
+  - Cause: **Enforcement status** was `Disabled`. A new ruleset isn't active until I switch it.
+  - Fix: set it to `Active` and save. A rule doesn't protect anything until it is switched on, and a greyed-out button proves it is.
+
+* **`git push` to `main` rejected: `Required status check "simple-job" is expected`**
+  - Symptom: `GH013: Repository rule violations found for refs/heads/main`, `push declined due to repository rule violations`.
+  - Cause: the ruleset needs the check to pass before a commit lands on `main`. A commit pushed straight to `main` has never been tested, however good the tests are.
+  - Fix: `git reset --soft HEAD~1`, `git switch -c <branch>`, commit, `git push -u origin <branch>`, open a PR, merge when green.
+
+* **My prediction: renaming the job "errors or just passes"**
+  - Symptom: wrong guess about what a renamed job does to a required check.
+  - Cause: the rule finds the check by the job name. A check that never reports isn't passed and isn't an error: it stays "expected" and blocks the merge.
+  - Fix: rename the job and update the ruleset in the same PR.
