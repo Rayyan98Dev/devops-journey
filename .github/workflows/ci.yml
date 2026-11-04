@@ -21,3 +21,25 @@ jobs:
             - name: pytest
               working-directory: projects/visit-counter/
               run: pytest
+
+    build-image:
+        needs: simple-job
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+        steps:
+            - uses: actions/checkout@v7.0.1
+            - name: log in to GHCR
+              if: github.event_name == 'push'
+              uses: docker/login-action@4.7.0
+              with:
+                registry: ghcr.io
+                username: ${{ github.actor }}
+                password: ${{ secrets.GITHUB_TOKEN }}
+            - name: build, and push only when allowed
+              uses: docker/build-push-action@v7.4.0
+              with:
+                context: projects/visit-counter
+                push: ${{ github.event_name == 'push' }}
+                tags: ghcr.io/rayyan98dev/visit-counter:${{ github.sha }}
