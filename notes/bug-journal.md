@@ -131,6 +131,31 @@ Format: symptom, cause, fix.
   - Cause: the path had no leading `/`, so Python looked inside the working directory (`/app/run/secrets/...`).
   - Fix: `/run/secrets/api_key`. A path that means "from the root of the container" starts with `/`.
 
+* **`docker build` failed: `FROM requires either one or three arguments`**
+  - Symptom: a parse error on the second `FROM`, before any step ran.
+  - Cause: `FROM pyhon-3.12 slim` had two words and a typo. An image is `name:tag`, so the tag follows a colon, not a dash or a space.
+  - Fix: `FROM python:3.12-slim`. Stage names are lowercase (`AS builder`), or BuildKit warns.
+
+* **`WORKDIR dev/` put the app in `/dev`**
+  - Symptom: none at first, only wrong when I read it.
+  - Cause: a relative `WORKDIR` starts from `/`, so `dev/` means `/dev`, the device directory.
+  - Fix: an absolute path: `WORKDIR /app`.
+
+* **`CMD app.py` printed `/bin/sh: 1: app.py: not found`**
+  - Symptom: the container exited at once; `COPY app.py .` had worked.
+  - Cause: shell form runs `sh -c "app.py"`, which looks for a program called `app.py`. I also thought it failed because the file was missing from my scratch folder, but the build context was `projects/visit-counter`, so the copy had worked. `RUN` is for build time, `CMD` for start time.
+  - Fix: `CMD ["python", "app.py"]`. The exec form also lets the app receive `SIGTERM` (no slow stop).
+
+* **Wrong `pip` and `COPY --from` forms in a multi-stage build**
+  - Symptom: wrote `pip install flask -r /install` and `COPY --from=/install`.
+  - Cause: `-r` takes a requirements **file**, `--prefix` takes the destination, and `--from` takes the **stage name**, not a path.
+  - Fix: `pip install --no-cache-dir --prefix=/install -r requirements.txt`, then `COPY --from=builder /install /usr/local`.
+
+* **My image ran as uid 1001, not 10001**
+  - Symptom: `docker run --rm vc-attempt id` printed `uid=1001(appuser)`.
+  - Cause: `useradd --uid` was left out, so the default number was used. My notes and the real image use 10001.
+  - Fix: `useradd --create-home --uid 10001 appuser`, then `USER appuser`.
+
 ## CI (GitHub Actions)
 
 * **`name` and `run` written as two list items**
@@ -177,3 +202,18 @@ Format: symptom, cause, fix.
   - Symptom: wrong guess about what a renamed job does to a required check.
   - Cause: the rule finds the check by the job name. A check that never reports isn't passed and isn't an error: it stays "expected" and blocks the merge.
   - Fix: rename the job and update the ruleset in the same PR.
+
+* **The first run of PR #5 failed, and the next commit was called "fixing docker version"**
+  - Symptom: a red ✗ on the first commit of the PR, green after the second.
+  - Cause: a wrong action version tag (the exact error wasn't saved, so this is the likely cause). An unresolvable tag fails the job at "Set up job", before any step.
+  - Fix: use a tag that exists on the action's Releases page, `v`-prefixed. Save the error text next time.
+
+* **Workflow expression mistakes caught in review (before running)**
+  - Symptom: `packages: docker`, `if: github.event_name == "push"`, `push: ${{ if: ... }}` and `push: ghcr.io/...:0.1.2`.
+  - Cause: `packages:` takes `read`, `write` or `none`. Expression text needs **single** quotes. `${{ }}` wraps only the expression, with no keyword inside. `push:` takes true or false, and the image name belongs in `tags:`.
+  - Fix: `packages: write`, `if: github.event_name == 'push'`, `push: ${{ github.event_name == 'push' }}`, name in `tags:`.
+
+* **Push to GHCR from Actions: `403 Forbidden` on `HEAD .../blobs/sha256:...`**
+  - Symptom: the login step was green, then the push failed.
+  - Cause: the package was created by my laptop's PAT and wasn't connected to the repo, so the repo's `GITHUB_TOKEN` had no write access. (401 is "who are you", 403 is "I know you, and no".)
+  - Fix: Package settings, **Manage Actions access**, add the repo with **Write**, re-run the failed jobs. The workflow's `permissions: packages: write` is a second, separate lock and still needed.
