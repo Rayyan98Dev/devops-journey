@@ -31,7 +31,13 @@ One line per tangent. Friday slot: explore the best two.
 - `push.autoSetupRemote` (3 Nov): a Git setting that makes plain `git push` create and link a new branch, so no `-u` is needed. Is it worth it, or is `-u` a better habit while I learn?
 - Other ruleset options (3 Nov): "require branches to be up to date before merging", requiring approvals (pointless alone), and "require linear history". What does each change, and which would a team turn on?
 - Merge button choices (3 Nov): merge commit vs squash vs rebase. How do they change the history `git log --graph` shows?
-- `paths:` filter for a workflow (3 Nov): run CI only when code changes, not for a notes-only PR. But a skipped required check can block the merge, so check how GitHub treats it.
+- `paths:` filter for a workflow (3 Nov): run CI only when code changes, not for a notes-only PR. But a skipped required check can block the merge, so check how GitHub treats it. (5 Nov: now there's a reason, since every notes PR that merges to `main` rebuilds and pushes an image.)
+- Does a skipped required check count as passing? (5 Nov) When `simple-job` fails, `build-image` is skipped. The PR is blocked by `simple-job` anyway, but test what GitHub does with a skipped required check on its own.
+- Build cache for the image (5 Nov): each runner starts empty, so pip reinstalls every time (about 40 s). Look at `cache-from` and `cache-to` with `type=gha` on the build action.
+- Link the package to the repo (5 Nov): I used **Manage Actions access**. The other ways are the **Connect Repository** button and `LABEL org.opencontainers.image.source` in the Dockerfile. What does each one change?
+- Pin actions by commit SHA (5 Nov): a tag like `@v7` can be moved by whoever owns the action. Pinning to a full SHA is safer. Look at what that does to updates.
+- Where did `COPY --from=builder /install /usr` land? (5 Nov) I expected Python not to find the packages there (`/usr/local` is where Python looks), but I fixed it before testing. Rebuild with `/usr` and read `sys.path` to see.
+- Did auto-delete of merged branches work on PR #5? (5 Nov) After the merge, run `git fetch --prune` and `git branch -a`.
 - After Week 4: "build your own container" from the `build-your-own-x` repo (Docker section), to see what containers really are underneath.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
 
