@@ -89,6 +89,7 @@ Format: symptom, cause, fix.
   - Fix: `git log --oneline`, and `cat .git/HEAD` (or `git rev-parse HEAD`) to look at it.
 
 ## Docker
+
 * **Phone reached a container port I never opened**
   - Symptom: `-p 8080:80` nginx loaded on my phone, but 8080 isn't open in my firewall zone.
   - Cause: Docker writes its own firewall rules that run before firewalld's zones, and `-p 8080:80` listens on `0.0.0.0` (every connection).
@@ -218,26 +219,70 @@ Format: symptom, cause, fix.
   - Cause: the package was created by my laptop's PAT and wasn't connected to the repo, so the repo's `GITHUB_TOKEN` had no write access. (401 is "who are you", 403 is "I know you, and no".)
   - Fix: Package settings, **Manage Actions access**, add the repo with **Write**, re-run the failed jobs. The workflow's `permissions: packages: write` is a second, separate lock and still needed.
 
-Add these entries at the end of `notes/bug-journal.md`:
+## Terraform
 
-## 2026-11-11 — Terraform
+* **`plan` showed `0777` permissions for a `local_file`**
+  - Symptom: `file_permission = "0777"` and `directory_permission = "0777"` in the plan.
+  - Cause: that is the provider's default, so anyone can read, write and execute the file.
+  - Fix: `file_permission = "0600"` and `directory_permission = "0700"`. I only saw it because I read the plan before typing `yes`.
 
-- **Symptom:** plan showed `directory_permission = "0777"` and `file_permission = "0777"` for a `local_file`.
-  **Cause:** that is the provider's default (world-readable, writable, executable).
-  **Fix:** `file_permission = "0600"` and `directory_permission = "0700"` in `main.tf`. Found only because I read the plan before typing `yes`.
+* **Typed `1` at the `apply` prompt**
+  - Symptom: `Apply cancelled.`
+  - Cause: Terraform accepts only the full word `yes`.
+  - Fix: type `yes`. Nothing had been created, so there was nothing to undo.
 
-- **Symptom:** typed `1` at the apply prompt and got "Apply cancelled".
-  **Cause:** Terraform accepts only the full word `yes`.
-  **Fix:** type `yes`. Nothing had been created, so nothing to undo.
+* **Expected a replace to show `0 to change`** (wrong twice)
+  - Symptom: after changing `content`, the plan showed `-/+` and `1 to add, 0 to change, 1 to destroy`.
+  - Cause: `content` on `local_file` forces replacement (`# forces replacement`). A replace counts as one add plus one destroy, never as a change. The provider decides per attribute whether an edit is in place or a replace.
+  - Fix: look for `-/+`, "must be replaced" and `# forces replacement` before typing `yes`.
+    - **Check:** the hashes changing is a side effect, not the danger. On real infrastructure a replace deletes the old thing first (a database with its data, or a server that comes back with a new IP address).
 
-- **Symptom:** after changing `content` the plan showed `-/+` and `1 to add, 0 to change, 1 to destroy`.
-  **Cause:** `content` on `local_file` forces replacement (`# forces replacement`).
-  **Fix:** none needed for a file; on real infrastructure this is the line to stop and think about.
+* **A line I added by hand to `hello.bar` vanished after `apply`**
+  - Symptom: my `hacked` line was gone.
+  - Cause: drift. Reality changed behind Terraform's back, and the config is the source of truth, so `apply` made reality match it.
+  - Fix: change the `.tf` files, then `plan`, then `apply`. Never edit the resource by hand.
 
-- **Symptom:** a line I appended by hand to `hello.bar` disappeared after `terraform apply`.
-  **Cause:** drift. The config is the source of truth, and apply made reality match it.
-  **Fix:** make changes in `main.tf`, not on the resource.
+* **Thought `terraform destroy` deletes `terraform.tfstate`**
+  - Symptom: the state file was still there after `destroy`.
+  - Cause: state is Terraform's memory, not a resource it manages. It now holds no resources, and a `.backup` copy appeared.
+  - Fix: none needed. State is plain JSON and can hold secrets, so it never goes into Git.
 
-- **Symptom:** predicted `terraform destroy` would delete `terraform.tfstate`; it stayed.
-  **Cause:** state is Terraform's memory, not a resource it manages. It now holds zero resources, plus a `.backup` copy.
-  **Fix:** none; expected behaviour.
+* **Typed `yes` at a variable prompt**
+  - Symptom: `Enter a value:` for `var.greeting`, and the plan showed `content = yes`.
+  - Cause: the prompt was for the variable, not a confirmation. `yes` is for the `apply` and `destroy` confirmation only.
+  - Fix: read each prompt before answering. Only a plan, so nothing was created.
+
+* **`local.fullpath` instead of `local.full_path`**
+  - Symptom: `terraform validate` failed on the reference.
+  - Cause: the local is called `full_path` and I left out the underscore.
+  - Fix: `local.full_path`. The block is `locals` (plural), the reference is `local.` (singular).
+
+* **`-var 'full_path=/tmp/x'` was refused**
+  - Symptom: an error saying a value was given for an undeclared variable.
+  - Cause: `full_path` is a local, and locals can't be set from outside. Only variables can.
+  - Fix: none needed. A variable is an input; a local is a named value inside the config.
+
+* **Wrong precedence guess: environment variable vs `terraform.tfvars`**
+  - Symptom: I predicted `TF_VAR_greeting` would beat `terraform.tfvars`, and the plan showed the `tfvars` value.
+  - Cause: guessed instead of knowing the order.
+  - Fix: lowest to highest: `default`, `TF_VAR_name`, `terraform.tfvars` (and `*.auto.tfvars`), then `-var` and `-var-file`.
+
+* **Output `content_sha256` printed the file's text**
+  - Symptom: the output showed the content, not a hash.
+  - Cause: I used `local_file.hello.content` instead of `local_file.hello.content_sha256`. The hash is an attribute the provider computes, listed under "Attributes Reference" in its docs.
+  - Fix: `local_file.hello.content_sha256`. `sha256sum hello.bar` gave the same hash.
+
+* **Misspelled names in a data block**
+  - Symptom: `aws_availabilty_zones` with the label `availabe`, plus an output named `caller_arm`.
+  - Cause: typing slips. The block type is a name the provider knows, and the label is what later references use, so a slip in either breaks the config.
+  - Fix: `aws_availability_zones` and `available` and `caller_arn`. I fixed them before running, so `validate` passed. Run `validate` before the first plan.
+
+* **Predicted "three resources" for a plan with only data blocks**
+  - Symptom: I said the plan would add three, and it said it would add none.
+  - Cause: I counted blocks in the file instead of reading what Terraform said. A `data` block only reads, so it is not a resource.
+  - Fix: a data-only plan has no `Plan: N to add` line, only `Changes to Outputs`. Read the output before predicting a number.
+
+* **Pasted my full AWS account number into chat**
+  - Symptom: a plan with the 12-digit number in the ARN went into the chat after I had been asked to write `<account>`.
+  - Cause: I didn't scan the paste before sending it.
+  - Fix: look for the account number and the ARN before pasting. It isn't a password, but it stays out of chat and screenshots.
