@@ -40,6 +40,14 @@ One line per tangent. Friday slot: explore the best two.
 - Did auto-delete of merged branches work on PR #5? (5 Nov) After the merge, run `git fetch --prune` and `git branch -a`.
 - After Week 4: "build your own container" from the `build-your-own-x` repo (Docker section), to see what containers really are underneath.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
+- Why is the "Close account" button visible to my IAM admin `Learning` on a standalone account, when AWS docs say only root can close it? (Never click it. Look only.)
+- The "1 notice" in the Annotations of CI run #20: what does it say?
+- `terraform fmt` and `terraform validate`: what do they check, and when to run them?
+- Remote state backends: where do teams keep state so it isn't on one laptop and isn't in git?
+- `terraform plan -out`: saving a plan and applying exactly that plan (CI).
+- `local_sensitive_file`: what exactly does it hide, given the state still stores the content in clear text?
+- Why does `local_file` plan a *create* (not an update) after I edit the file by hand? (Its `id` is the content's SHA1; check the provider docs.)
+- Delete the deactivated root access key on Mon 16 Nov (ClickUp task exists).
 
 ## Answered
 

@@ -217,3 +217,27 @@ Format: symptom, cause, fix.
   - Symptom: the login step was green, then the push failed.
   - Cause: the package was created by my laptop's PAT and wasn't connected to the repo, so the repo's `GITHUB_TOKEN` had no write access. (401 is "who are you", 403 is "I know you, and no".)
   - Fix: Package settings, **Manage Actions access**, add the repo with **Write**, re-run the failed jobs. The workflow's `permissions: packages: write` is a second, separate lock and still needed.
+
+Add these entries at the end of `notes/bug-journal.md`:
+
+## 2026-11-11 — Terraform
+
+- **Symptom:** plan showed `directory_permission = "0777"` and `file_permission = "0777"` for a `local_file`.
+  **Cause:** that is the provider's default (world-readable, writable, executable).
+  **Fix:** `file_permission = "0600"` and `directory_permission = "0700"` in `main.tf`. Found only because I read the plan before typing `yes`.
+
+- **Symptom:** typed `1` at the apply prompt and got "Apply cancelled".
+  **Cause:** Terraform accepts only the full word `yes`.
+  **Fix:** type `yes`. Nothing had been created, so nothing to undo.
+
+- **Symptom:** after changing `content` the plan showed `-/+` and `1 to add, 0 to change, 1 to destroy`.
+  **Cause:** `content` on `local_file` forces replacement (`# forces replacement`).
+  **Fix:** none needed for a file; on real infrastructure this is the line to stop and think about.
+
+- **Symptom:** a line I appended by hand to `hello.bar` disappeared after `terraform apply`.
+  **Cause:** drift. The config is the source of truth, and apply made reality match it.
+  **Fix:** make changes in `main.tf`, not on the resource.
+
+- **Symptom:** predicted `terraform destroy` would delete `terraform.tfstate`; it stayed.
+  **Cause:** state is Terraform's memory, not a resource it manages. It now holds zero resources, plus a `.backup` copy.
+  **Fix:** none; expected behaviour.
