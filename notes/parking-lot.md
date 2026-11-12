@@ -40,14 +40,22 @@ One line per tangent. Friday slot: explore the best two.
 - Did auto-delete of merged branches work on PR #5? (5 Nov) After the merge, run `git fetch --prune` and `git branch -a`.
 - After Week 4: "build your own container" from the `build-your-own-x` repo (Docker section), to see what containers really are underneath.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
-- Why is the "Close account" button visible to my IAM admin `Learning` on a standalone account, when AWS docs say only root can close it? (Never click it. Look only.)
-- The "1 notice" in the Annotations of CI run #20: what does it say?
-- `terraform fmt` and `terraform validate`: what do they check, and when to run them?
-- Remote state backends: where do teams keep state so it isn't on one laptop and isn't in git?
-- `terraform plan -out`: saving a plan and applying exactly that plan (CI).
-- `local_sensitive_file`: what exactly does it hide, given the state still stores the content in clear text?
-- Why does `local_file` plan a *create* (not an update) after I edit the file by hand? (Its `id` is the content's SHA1; check the provider docs.)
-- Delete the deactivated root access key on Mon 16 Nov (ClickUp task exists).
+- "Close account" button (10 Nov): why is it visible to my IAM admin `Learning` on a standalone account, when AWS docs say only root can close it? Never click it; look only.
+- Delete the deactivated root access key (10 Nov): Mon 16 Nov, ClickUp task exists.
+- "1 notice" in the Annotations of CI run #20 (10 Nov): what does it say?
+- Remote state backends (11 Nov): where do teams keep state so it isn't on one laptop and isn't in Git?
+- `terraform plan -out` (11 Nov): save a plan and apply exactly that plan (needed in CI).
+- `local_sensitive_file` (11 Nov): what exactly does it hide, given the state still stores the content in clear text?
+- Why does `local_file` plan a *create* (not an update) after I edit the file by hand? (11 Nov) Its `id` is the SHA1 of the content; check the provider docs.
+- Least-privilege IAM policy (12 Nov): write one for Project 2 instead of using `AdministratorAccess` for everything.
+- Variable `validation` blocks (12 Nov): reject a bad value before the plan.
+- `*.auto.tfvars` and `-var-file` (12 Nov): when to use each instead of `terraform.tfvars`.
+- `terraform providers lock` (12 Nov): lock hashes for other platforms, so CI on a different OS accepts the same lock file.
+- `aws_iam_policy_document` (12 Nov): build policy JSON in Terraform (it makes no AWS call).
+- Roles and assuming a role (12 Nov): how a person or service takes on a role temporarily, and what `sts:AssumeRole` does.
+- `.gitignore` for Terraform (12 Nov): `~/dev/lab/terraform` isn't a Git repo, so state can't be committed by accident. When Project 2 becomes a repo, create `.gitignore` (`.terraform/`, `*.tfstate`, `*.tfstate.backup`, `*.tfvars`) before the first commit, and commit `.terraform.lock.hcl`.
+- Cross-zone traffic in AWS (12 Nov): what it costs and when it matters (zone IDs vs names).
+- `aws login` with Terraform (12 Nov): it worked directly with provider v6.73.0 and no fallback command. Record the version if it ever stops working.
 
 ## Answered
 
@@ -63,3 +71,4 @@ One line per tangent. Friday slot: explore the best two.
 - Could a 404 be caught in the `except` instead of an `if`? (Fri 23 Oct) Yes: `requests.get` only raises when it can't talk to the server; `r.raise_for_status()` turns a 4xx or 5xx answer into `requests.HTTPError`, with the response in `e.response.status_code`. If `requests.get` itself fails, `r` is never assigned (`UnboundLocalError`), so `return` in the `except` or use `else:`. Redirects are followed by default, so a redirect to a home page shows as 200.
 - What does `-p 127.0.0.1:8081:80` change, and what does `EXPOSE` do? (Fri 23 Oct) The host IP picks which of the laptop's addresses accept connections: `127.0.0.1` only the laptop itself, none at all means every address (so the Wi-Fi can connect). `EXPOSE` is only a note in the image (`80/tcp`); it opens nothing, and `-p` works without it. Only `-P` uses it, publishing each exposed port to a random high host port (`0.0.0.0:32768`).
 - Is `ssh` in the `public` zone a risk? (Thu 15 Oct) Not right now: `sshd` is `disabled` and `inactive (dead)`, so nothing listens on port 22. Being allowed and listening are two separate checks.
+- What do `terraform fmt` and `terraform validate` do? (Thu 12 Nov) `fmt` rewrites the files into the standard layout and prints the names it changed (mine: `variables.tf`, tabs to spaces). `validate` checks syntax and references only, without touching state or real infrastructure, so passing it doesn't mean `apply` will work. Habit: `fmt`, `validate`, `plan`.
