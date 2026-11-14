@@ -42,7 +42,7 @@ One line per tangent. Friday slot: explore the best two.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
 - "Close account" button (10 Nov): why is it visible to my IAM admin `Learning` on a standalone account, when AWS docs say only root can close it? Never click it; look only.
 - Delete the deactivated root access key (10 Nov): Mon 16 Nov, ClickUp task exists.
-- "1 notice" in the Annotations of CI run #20 (10 Nov): what does it say?
+- "1 notice" in the Annotations of CI run #20 (10 Nov): what does it say? (14 Nov) Run #26's notice was the Trivy version notice; check whether run #20's is the same kind.
 - Remote state backends (11 Nov): where do teams keep state so it isn't on one laptop and isn't in Git?
 - `terraform plan -out` (11 Nov): save a plan and apply exactly that plan (needed in CI).
 - `local_sensitive_file` (11 Nov): what exactly does it hide, given the state still stores the content in clear text?
@@ -56,6 +56,11 @@ One line per tangent. Friday slot: explore the best two.
 - `.gitignore` for Terraform (12 Nov): `~/dev/lab/terraform` isn't a Git repo, so state can't be committed by accident. When Project 2 becomes a repo, create `.gitignore` (`.terraform/`, `*.tfstate`, `*.tfstate.backup`, `*.tfvars`) before the first commit, and commit `.terraform.lock.hcl`.
 - Cross-zone traffic in AWS (12 Nov): what it costs and when it matters (zone IDs vs names).
 - `aws login` with Terraform (12 Nov): it worked directly with provider v6.73.0 and no fallback command. Record the version if it ever stops working.
+- Update the Trivy version CI runs (14 Nov): the action pins Trivy 0.70.0 and 0.76.2 exists. How do I bump it (a newer action release, or the action's version input), how do I verify the new release, and why not just chase "newest" after the March attack?
+- `.trivyignore` (14 Nov): the file format, and when ignoring a CVE is acceptable. Rule: the CVE ID, a written reason and a review date.
+- Weekly scheduled scan of the published image (14 Nov): a `schedule:` trigger, so a new CVE shows up without waiting for a PR.
+- CVE titles that don't match the library (14 Nov): CVE-2026-76844's title talked about `webpack-dev-middleware` for a zlib finding. Check the avd.aquasec.com page and the Debian security tracker to see which is right.
+- Dockerfile layer order for the cache (14 Nov): move the `apt-get install --only-upgrade zlib1g` line above `COPY app.py .` so it isn't rerun on every code change. Also: is a more reproducible way to patch the base image better than upgrading on build day?
 
 ## Answered
 
