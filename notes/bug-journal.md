@@ -219,6 +219,37 @@ Format: symptom, cause, fix.
   - Cause: the package was created by my laptop's PAT and wasn't connected to the repo, so the repo's `GITHUB_TOKEN` had no write access. (401 is "who are you", 403 is "I know you, and no".)
   - Fix: Package settings, **Manage Actions access**, add the repo with **Write**, re-run the failed jobs. The workflow's `permissions: packages: write` is a second, separate lock and still needed.
 
+* **Pinned `trivy-action` by tag, then by a 7-character SHA**
+  - Symptom: my first draft had `@v0.36.0` with the comment `# v?.??.?`, and later I gave only `ed142fd`.
+  - Cause: a tag is a movable name (the March 2026 attack moved tags), and GitHub needs the **full 40-character** commit SHA in a `uses:` line, so a short one fails with "unable to resolve action".
+  - Fix: `aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25   # v0.36.0`. Copy the full hash from the commit link on the release page.
+
+* **Invented `if: ${{ exit-code == 0 }}` for the push step**
+  - Symptom: a condition that can't work.
+  - Cause: a workflow can't read `exit-code` like that, and it isn't needed. A step after a failed step is skipped anyway, because every `if:` without a status function has an implicit `success() &&` in front.
+  - Fix: `if: github.event_name == 'push'`.
+
+* **Wrong formats in the `trivy-action` inputs**
+  - Symptom: `severity: HIGH, CRITICAL`, `ignore-unfixed: TRUE` and `exit-code: 1`, plus `image-ref: ???` left in.
+  - Cause: the inputs are strings, a space after the comma is part of the value, and `image-ref` must name the image I just built.
+  - Fix: `severity: 'HIGH,CRITICAL'`, `ignore-unfixed: true`, `exit-code: '1'`, and `image-ref` equal to the build step's `tags:`.
+
+* **Thought a separate scan job could use the image**
+  - Symptom: I said a second job could "download the image".
+  - Cause: each job starts on a fresh runner, and an image built with `load: true` exists only on the runner that built it. The only way to share it is to push it first (the thing the gate is meant to stop), or to pass it as an artifact.
+  - Fix: one job with three steps: build (`load: true`, `push: false`), scan, push.
+
+* **Trivy scan went red: two HIGH CVEs in `zlib1g`** (the gate working)
+  - Symptom: run #26: `scan the image` failed with exit code 1, the push step was skipped. The Debian 13.7 row showed 2 vulnerabilities, the 9 Python packages showed 0.
+  - Cause: `zlib1g 1:1.3.dfsg+really1.3.1-1+b1` in the `python:3.12-slim` base, with the fix in `...+deb13u1`. New CVEs were published since my 6 Nov local scan (which had shown an `apt` CVE).
+  - Fix: `RUN apt-get update && apt-get install -y --only-upgrade zlib1g && rm -rf /var/lib/apt/lists/*` in the final stage. CI went green.
+    - **Check:** I expected the old `apt` CVE and blamed the outdated Trivy version. Neither was right: the version notice was only a notice, and the finding was new. One advisory title mentioned `webpack-dev-middleware` for a zlib finding, so trust the library and versions, not the title.
+
+* **Put the root-only `apt` line below `USER appuser`**
+  - Symptom: my first answer was "underneath, so it runs as appuser".
+  - Cause: every instruction after `USER` runs as that user, and installing packages needs root. (Caught in review, before it ran.)
+  - Fix: root work first, then `USER appuser` as the last step before `CMD`.
+
 ## Terraform
 
 * **`plan` showed `0777` permissions for a `local_file`**
