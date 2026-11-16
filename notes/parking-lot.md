@@ -41,13 +41,12 @@ One line per tangent. Friday slot: explore the best two.
 - After Week 4: "build your own container" from the `build-your-own-x` repo (Docker section), to see what containers really are underneath.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
 - "Close account" button (10 Nov): why is it visible to my IAM admin `Learning` on a standalone account, when AWS docs say only root can close it? Never click it; look only.
-- Delete the deactivated root access key (10 Nov): Mon 16 Nov, ClickUp task exists.
 - "1 notice" in the Annotations of CI run #20 (10 Nov): what does it say? (14 Nov) Run #26's notice was the Trivy version notice; check whether run #20's is the same kind.
 - Remote state backends (11 Nov): where do teams keep state so it isn't on one laptop and isn't in Git?
 - `terraform plan -out` (11 Nov): save a plan and apply exactly that plan (needed in CI).
 - `local_sensitive_file` (11 Nov): what exactly does it hide, given the state still stores the content in clear text?
 - Why does `local_file` plan a *create* (not an update) after I edit the file by hand? (11 Nov) Its `id` is the SHA1 of the content; check the provider docs.
-- Least-privilege IAM policy (12 Nov): write one for Project 2 instead of using `AdministratorAccess` for everything.
+- Least-privilege IAM policy (12 Nov): write one for Project 2 instead of using `AdministratorAccess` for everything. (16 Nov) Start with the Lambda execution role: only `dynamodb:GetItem`/`UpdateItem` on the one table, plus CloudWatch Logs.
 - Variable `validation` blocks (12 Nov): reject a bad value before the plan.
 - `*.auto.tfvars` and `-var-file` (12 Nov): when to use each instead of `terraform.tfvars`.
 - `terraform providers lock` (12 Nov): lock hashes for other platforms, so CI on a different OS accepts the same lock file.
@@ -61,6 +60,11 @@ One line per tangent. Friday slot: explore the best two.
 - Weekly scheduled scan of the published image (14 Nov): a `schedule:` trigger, so a new CVE shows up without waiting for a PR.
 - CVE titles that don't match the library (14 Nov): CVE-2026-76844's title talked about `webpack-dev-middleware` for a zlib finding. Check the avd.aquasec.com page and the Debian security tracker to see which is right.
 - Dockerfile layer order for the cache (14 Nov): move the `apt-get install --only-upgrade zlib1g` line above `COPY app.py .` so it isn't rerun on every code change. Also: is a more reproducible way to patch the base image better than upgrading on build day?
+- Lambda credit activity (16 Nov): the Free plan gives extra credits for completing activities. Is the Lambda one worth doing, and can it be part of Project 2 without creating anything I don't need?
+- Account Access / `settings.aws.com` (16 Nov): how are other people invited to a new-style account, and what identity do they get?
+- What changes at upgrade (16 Nov): reportedly a root user appears. What else changes (billing, IAM console sign-in)? Never click Upgrade; read only.
+- Keep or delete IAM user `learning` (16 Nov): it has AdministratorAccess but no credentials and can't sign in to the console in this account type.
+- Does GitHub Actions OIDC work in this account type? (16 Nov) Cross-account `sts:AssumeRole` is reported as blocked. If OIDC (`AssumeRoleWithWebIdentity`) is blocked too, apply from the laptop with `aws login` and explain it in the README. Check on Tue 17 Nov.
 
 ## Answered
 
@@ -77,3 +81,4 @@ One line per tangent. Friday slot: explore the best two.
 - What does `-p 127.0.0.1:8081:80` change, and what does `EXPOSE` do? (Fri 23 Oct) The host IP picks which of the laptop's addresses accept connections: `127.0.0.1` only the laptop itself, none at all means every address (so the Wi-Fi can connect). `EXPOSE` is only a note in the image (`80/tcp`); it opens nothing, and `-p` works without it. Only `-P` uses it, publishing each exposed port to a random high host port (`0.0.0.0:32768`).
 - Is `ssh` in the `public` zone a risk? (Thu 15 Oct) Not right now: `sshd` is `disabled` and `inactive (dead)`, so nothing listens on port 22. Being allowed and listening are two separate checks.
 - What do `terraform fmt` and `terraform validate` do? (Thu 12 Nov) `fmt` rewrites the files into the standard layout and prints the names it changed (mine: `variables.tf`, tabs to spaces). `validate` checks syntax and references only, without touching state or real infrastructure, so passing it doesn't mean `apply` will work. Habit: `fmt`, `validate`, `plan`.
+- Delete the deactivated root access key? (Mon 16 Nov) Done: deleted after a week inactive (deactivated 9 Nov). A deleted key can't be switched back on by someone who gets into root, and root should have no access keys at all.
