@@ -317,3 +317,26 @@ Format: symptom, cause, fix.
   - Symptom: a plan with the 12-digit number in the ARN went into the chat after I had been asked to write `<account>`.
   - Cause: I didn't scan the paste before sending it.
   - Fix: look for the account number and the ARN before pasting. It isn't a password, but it stays out of chat and screenshots.
+
+## AWS
+
+* **Expected the classic root sign-up on the new account** (16 Nov)
+  - Symptom: the sign-up and console screens didn't match the steps I expected (root email, root password, root MFA).
+  - Cause: accounts created after 15 Jul 2025 use a new sign-up flow: you choose a Free or Paid plan, sign in through another identity, and (as reported) there is no root user until the account is upgraded.
+  - Fix: read the screen in front of me, not the steps I remember. Check the account's creation date and plan first.
+
+* **Predicted an access key would be needed for S3** (16 Nov)
+  - Symptom: I said the CLI or Terraform would need an access key before it could touch S3.
+  - Cause: I mixed up two separate things. **Credentials** say who I am; **policies** say what I'm allowed to do. An access key is only one way to get credentials, and the most dangerous one because it lasts until deleted.
+  - Fix: `aws login` gives short-lived credentials that expire by themselves. Permissions come from the policies on the identity.
+
+* **Expected the IAM user wizard to offer console access** (16 Nov)
+  - Symptom: IAM user `learning` has no Console sign-in section and no MFA section; Security credentials starts at Access keys.
+  - Cause: in the new Free-plan account type, IAM users can't get a console password (reported by Wiz; matches what I saw). Console sign-in is a session of `AccountFullAccessRole`.
+  - Fix: nothing to fix. `learning` has no credentials, so it's harmless; decide whether to keep or delete it. Still no access keys.
+
+* **Expected the CLI to ask which profile to use** (16 Nov)
+  - Symptom: `aws sts get-caller-identity` with no `--profile` failed and said I had to sign in again.
+  - Cause: with no `--profile` (and no `AWS_PROFILE`), the CLI always uses `default`, which is my own account. That login session had expired. It never asks or guesses.
+  - Fix: `--profile lab` for the lab account. The error showed that `aws login --profile lab` left `default` untouched.
+    - **Check:** `get-caller-identity --profile lab` printed `assumed-role/AccountFullAccessRole/...`. That's a **role session**, not root and not `learning`. My prediction said "my brother's account" without saying which identity.
