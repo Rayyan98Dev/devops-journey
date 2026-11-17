@@ -19,6 +19,11 @@ Format: symptom, cause, fix.
   - Cause: redirections run left to right, and `2>&1` copies where stdout points *at that moment*. Here stdout still pointed at the screen.
   - Fix: `> out.txt 2>&1`. Move stdout first, then copy it.
 
+* **Pasted a placeholder into the terminal** (17 Nov)
+  - Symptom: `git clone <your repo's clone URL> /tmp/readme-test` hung and showed `>`.
+  - Cause: `<` is a redirect, so the shell waited for input from a file.
+  - Fix: Ctrl-C (nothing ran). Replace placeholders with real values, or use `"$(git rev-parse --show-toplevel)"`.
+
 ## Python
 
 * **Argument count one too high**
@@ -156,6 +161,21 @@ Format: symptom, cause, fix.
   - Symptom: `docker run --rm vc-attempt id` printed `uid=1001(appuser)`.
   - Cause: `useradd --uid` was left out, so the default number was used. My notes and the real image use 10001.
   - Fix: `useradd --create-home --uid 10001 appuser`, then `USER appuser`.
+
+* **Expected a missing secret file to make the container "unhealthy"** (17 Nov)
+  - Symptom: fresh clone, `docker compose up`: `invalid mount config for type "bind": bind source path does not exist: .../secrets/api_key.txt`.
+  - Cause: unhealthy means the container runs and fails its healthcheck. Here Docker couldn't create the container at all, so there is no health status. A fresh clone lacks `.env` and `secrets/api_key.txt` (`app.env` is committed).
+  - Fix: README steps that create `.env` and `secrets/api_key.txt` with a dummy key. `ls -a` in the clone shows what is missing.
+
+* **Fresh-clone test reused my real project's Redis** (17 Nov)
+  - Symptom: `visit-counter-redis-1` was "created 2 weeks ago" and the page said "visited 10 times".
+  - Cause: Compose names a project after its folder. The clone's folder was also `visit-counter`, so it matched my real containers and volume (`visit-counter_redis-data`). The tutor's `down -v` would have deleted that real volume (caught before it ran).
+  - Fix: `docker compose -p readme-test up -d --build` isolates the test (new network, volume and containers; first visit is 1), and `-p readme-test down -v` is safe. Without `-p`, never use `-v`.
+
+* **Thought `.env` beats `app.env`** (17 Nov)
+  - Symptom: my comment in `app.env` said ".env always beats it".
+  - Cause: two steps. First `.env` (or the shell) fills in `${...}` inside `compose.yaml`. Then the container gets `environment:` over `env_file:` (`app.env`) over Dockerfile `ENV`. `.env` never feeds the container directly.
+  - Fix: the comment says `environment:` in `compose.yaml` overrides this file, and its value comes from `.env`. Still shaky: hands-on test in the parking lot.
 
 ## CI (GitHub Actions)
 
@@ -317,6 +337,27 @@ Format: symptom, cause, fix.
   - Symptom: a plan with the 12-digit number in the ARN went into the chat after I had been asked to write `<account>`.
   - Cause: I didn't scan the paste before sending it.
   - Fix: look for the account number and the ARN before pasting. It isn't a password, but it stays out of chat and screenshots.
+  - Happened again on 17 Nov, in an `AccessDenied` error message that names the account twice. Read error pastes too, and swap the number for `<account>`.
+
+* **Predicted a warning for a sensitive value in an output** (17 Nov)
+  - Symptom: I guessed `plan` would warn. It stopped with an error (`Output refers to sensitive values`).
+  - Cause: a warning would let the secret print anyway, so Terraform treats the leak as a hard error.
+  - Fix: `sensitive = true` on the output.
+
+* **Thought `sensitive = true` hides the value everywhere** (17 Nov) (all three predictions wrong)
+  - Symptom: `terraform output secret_echo` printed `"banana-123"`, `-raw` printed it plain, and `grep banana terraform.tfstate` found it twice (the output value and the file's `content`).
+  - Cause: `sensitive` hides values in plan, apply and the bare `terraform output` list only. A named output, `-raw` and the state file aren't covered.
+  - Fix: nothing to fix; know the limit. State never goes in Git. After `destroy`, `terraform.tfstate.backup` still holds the secret (my prediction was right), and an S3 bucket with versioning keeps old copies too, so no secrets go into Terraform at all.
+
+* **Expected `arn` to show a real ARN in a plan** (17 Nov)
+  - Symptom: I predicted my brother's ARN; the plan showed `arn = (known after apply)`.
+  - Cause: AWS generates the ARN, `id` and `unique_id` when the group is created. Terraform only knows what it was given or has read.
+  - Fix: read `(known after apply)` as "AWS decides this".
+
+* **Expected an error after deleting a resource block that was never applied** (17 Nov)
+  - Symptom: `plan` said `No changes. Your infrastructure matches the configuration.`
+  - Cause: plan compares the config with the state. Nothing was applied, so both were empty. If the group had been applied, the state remembers it and deleting the block plans a destroy (`0 to add, 0 to change, 1 to destroy`). At wrap-up I still answered "no changes" for the applied case.
+  - Fix: before typing `yes`, read every `-` line. Re-test tomorrow.
 
 ## AWS
 
@@ -340,3 +381,21 @@ Format: symptom, cause, fix.
   - Cause: with no `--profile` (and no `AWS_PROFILE`), the CLI always uses `default`, which is my own account. That login session had expired. It never asks or guesses.
   - Fix: `--profile lab` for the lab account. The error showed that `aws login --profile lab` left `default` untouched.
     - **Check:** `get-caller-identity --profile lab` printed `assumed-role/AccountFullAccessRole/...`. That's a **role session**, not root and not `learning`. My prediction said "my brother's account" without saying which identity.
+
+* **Assumed GitHub Actions could log in to the new account with OIDC** (17 Nov)
+  - Symptom: `aws iam list-open-id-connect-providers --profile lab` returned `AccessDenied ... with an explicit deny in a service control policy`. I ran it before predicting.
+  - Cause: AWS puts a guardrail SCP on new-experience accounts. Its Deny on `iam:*Provider*` also blocks creating the OIDC provider. An explicit Deny above the account beats any Allow inside it, even full access.
+  - Fix: the "A+" workflow: CI runs `fmt -check`, `init -backend=false`, `validate` and `trivy config` without AWS; `plan` and `apply` run by hand with `aws login --profile lab`; the OIDC code is written but off (`enable_github_oidc = false`).
+    - **Check:** the error says who said no ("service control policy"), so I know the block is above my role.
+
+* **Thought `aws login` credentials last 15 minutes** (17 Nov)
+  - Symptom: I predicted `terraform plan` would fail with "no valid credentials" because 15 minutes had passed.
+  - Cause: the login session lasts up to 12 hours. The temporary credentials inside it refresh about every 15 minutes.
+  - Fix: if the CLI or Terraform can't find credentials, run `aws login --profile lab` again.
+
+## README
+
+* **README mistakes caught in review** (17 Nov)
+  - Symptom: an SSH clone address (`git@github.com:...`) and a test folder path, `down -v` as the normal stop command, "push the image to main", the Trivy scan missing from both flows, a merge flow labelled "On a PR run", and no reason why a PR doesn't push.
+  - Cause: I wrote from my own setup, not a stranger's. An SSH address needs my key. `down -v` deletes the count I claim survives. `main` is a branch; the image goes to GHCR tagged with the commit SHA. The scan is the gate.
+  - Fix: an https clone address, `down` (keeps the count) and `down -v` (deletes it) as separate lines, both flows including the scan, and one line on why a PR doesn't push (only reviewed, tested, merged code is published). Every command was tested from a clean clone.
