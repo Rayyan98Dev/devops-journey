@@ -44,7 +44,6 @@ One line per tangent. Friday slot: explore the best two.
 - "1 notice" in the Annotations of CI run #20 (10 Nov): what does it say? (14 Nov) Run #26's notice was the Trivy version notice; check whether run #20's is the same kind.
 - `terraform plan -out` (11 Nov): save a plan and apply exactly that plan (needed in CI).
 - Why does `local_file` plan a *create* (not an update) after I edit the file by hand? (11 Nov) Its `id` is the SHA1 of the content; check the provider docs.
-- Least-privilege IAM policy (12 Nov): write one for Project 2 instead of using `AdministratorAccess` for everything. (16 Nov) Start with the Lambda execution role: only `dynamodb:GetItem`/`UpdateItem` on the one table, plus CloudWatch Logs.
 - Variable `validation` blocks (12 Nov): reject a bad value before the plan.
 - `*.auto.tfvars` and `-var-file` (12 Nov): when to use each instead of `terraform.tfvars`.
 - `terraform providers lock` (12 Nov): lock hashes for other platforms, so CI on a different OS accepts the same lock file.
@@ -65,9 +64,7 @@ One line per tangent. Friday slot: explore the best two.
 - `${REDIS_HOST:-redis}` (17 Nov): a default inside `compose.yaml`, so `.env` is optional for that line. `app.py`'s `.get("REDIS_HOST", "redis")` does not fall back when the variable is set but empty.
 - README sections 5 and 6 (17 Nov): security decisions (read-only, tmpfs `noexec`, `cap_drop: ALL`, `no-new-privileges`, memory and pid limits, healthchecks, `init`, port on `127.0.0.1`, Compose secret, commit-SHA tag, Trivy gate, SHA-pinned action, protected `main`) and what I learned. A second small PR.
 - Free Tier usage (17 Nov): watch Lambda and DynamoDB against their limits with the Billing console's Free Tier page or the `GetFreeTierUsage` API.
-- DynamoDB billing mode (17 Nov): always-free covers provisioned capacity (25 RCU and 25 WCU), reportedly not on-demand. Check the pricing page before building on Thursday.
-- Public Lambda function URL (17 Nov): how to stop abuse (reserved concurrency, or `AWS_IAM` auth instead of a public URL). Decide Thursday.
-- What happens on 16 May 2027 (17 Nov): the Free plan ends, with 90 days to upgrade before the account closes. Where does Project 2 live afterwards (my own account)?
+- What happens on 16 May 2027 (17 Nov): the Free plan ends, with 90 days to upgrade before the account closes. Where does Project 2 live afterwards (my own account)? (19 Nov) The URL is public, so on a Paid plan abuse could cost real money: destroy it or add a budget alarm before May.
 - Song metadata service (17 Nov): after Project 2. The phone detects new songs and sends names to a Lambda, which looks up metadata (for example MusicBrainz; check its rate limits) and stores it in DynamoDB. The phone does the tagging. No audio uploads.
 - `profile = "lab"` in the backend block (18 Nov): it ties the code to my laptop's profile name. Use `AWS_PROFILE=lab` or `-backend-config` instead.
 - Narrower Trivy ignore (18 Nov): `AWS-0132` in `.trivyignore` skips that rule for the whole repo, so a future bucket is skipped silently. A `.trivyignore.yaml` can limit it to one path.
@@ -75,6 +72,10 @@ One line per tangent. Friday slot: explore the best two.
 - `prevent_destroy` on the state bucket (18 Nov): a `lifecycle` setting that makes any plan to delete it fail. Worth it, and how does it fit the Saturday `destroy` rehearsal?
 - Disaster recovery for bootstrap (19 Nov): if the laptop dies, only bootstrap's local state is lost. Write the four `terraform import` commands (bucket, versioning, public access block, encryption) in the README.
 - Link `aws-serverless-visit-counter` from `devops-journey/projects/README.md` (18 Nov).
+- One name for the function (19 Nov): put `visit-counter` in a `local` used by both the function and the log group, so a typo can't split them.
+- `lambda:InvokedViaFunctionUrl` (19 Nov): the condition behind `invoked_via_function_url = true`. Read the policy Terraform creates (`aws lambda get-policy`) after the apply.
+- boto3 basics (19 Nov): the handler was given, not written by me. Learn `boto3.resource` vs `boto3.client`, what `update_item` and `UpdateExpression` (`ADD`, `SET`) do, and `ReturnValues`. Why did the zip need no `requirements.txt`? (The Python runtime already includes boto3; check which version.)
+- Cold starts (19 Nov): how long the first request takes vs the next ones, and how code outside `handler` changes that. Measure with `curl -w '%{time_total}'`.
 
 ## Answered
 
@@ -99,3 +100,7 @@ One line per tangent. Friday slot: explore the best two.
 - `trivy config` (17 Nov → in CI Wed 18 Nov): scans the Terraform without an AWS login, fails on HIGH/CRITICAL (`exit-code 1`). `AWS-0132` (customer-managed KMS key) ignored with a written reason: about USD 1 a month, for a learning bucket.
 - Does the provider count in `Plan: N to add`? (Wed 18 Nov) No. Only resources are counted; a provider is a plugin, not something that's created.
 - When does an output show a value at plan time? (Wed 18 Nov) When it comes from something I wrote (a literal like the bucket name). `(known after apply)` only when AWS generates it (ARN, ID).
+- Least-privilege IAM policy (12 Nov → written Thu 19 Nov): the Lambda role allows only `dynamodb:UpdateItem` on the `visits` table and `logs:CreateLogStream`/`PutLogEvents` on its own log group. `GetItem` was dropped because the code never reads, and `CreateLogGroup` isn't needed because Terraform makes the group.
+- DynamoDB billing mode (17 Nov → Thu 19 Nov): the always-free 25 RCU / 25 WCU are **provisioned** capacity only, per Region and payer account (pricing page checked). On-demand gets free storage but no free requests. Table is `PROVISIONED`, 1/1.
+- Public function URL (17 Nov → Thu 19 Nov): `authorization_type = "NONE"` with `reserved_concurrent_executions = 2`. The cap limits damage (extra requests are throttled), it doesn't stop requests arriving. Since Oct 2025 a public URL needs two permissions: `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction` (via the URL).
+- Why is `table = ...` outside `handler`? (Thu 19 Nov) Code outside the handler runs once when a new copy of the function starts; later requests to that copy reuse the connection.

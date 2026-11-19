@@ -93,6 +93,11 @@ Format: symptom, cause, fix.
   - Cause: a typo (`--oneline`), and `HEAD` is a pointer, not a command.
   - Fix: `git log --oneline`, and `cat .git/HEAD` (or `git rev-parse HEAD`) to look at it.
 
+* **Thought `git fetch --prune` cleans up after a merge** (19 Nov)
+  - Symptom: I gave `git fetch --prune` as the whole cleanup after merging a PR.
+  - Cause: `--prune` only removes `origin/<branch>` copies of branches deleted on GitHub. It doesn't update my local `main` or delete my local branch.
+  - Fix: `git switch main`, `git pull`, `git fetch --prune`, `git branch -d <branch>`. Check with `git branch -a`.
+
 ## Docker
 
 * **Phone reached a container port I never opened**
@@ -176,6 +181,11 @@ Format: symptom, cause, fix.
   - Symptom: my comment in `app.env` said ".env always beats it".
   - Cause: two steps. First `.env` (or the shell) fills in `${...}` inside `compose.yaml`. Then the container gets `environment:` over `env_file:` (`app.env`) over Dockerfile `ENV`. `.env` never feeds the container directly.
   - Fix: the comment says `environment:` in `compose.yaml` overrides this file, and its value comes from `.env`. Still shaky: hands-on test in the parking lot.
+
+* **Said 1001 and "rootless" again at the README review** (19 Nov)
+  - Symptom: listing Project 1's security decisions, I said the app runs as uid 1001 and that `sudo docker` is rootless.
+  - Cause: the same uid slip as before, and I mixed up the two Docker modes. `sudo docker` talks to the root daemon, so it's **rootful**. Rootless was dropped on 26 Oct.
+  - Fix: uid **10001**; rootful Docker plus hardened containers. Both are now written in the README's "Security decisions".
 
 ## CI (GitHub Actions)
 
@@ -384,6 +394,46 @@ Format: symptom, cause, fix.
   - Cause: it's about timing, not the value. The backend is read **during** `init`, before any variable or resource is evaluated.
   - Fix: literal values only in the `backend` block; anything that changes goes in `-backend-config`.
 
+* **Gave "locals" as a variable source** (19 Nov quiz)
+  - Symptom: my precedence order was `-var`, local, `terraform.tfvars`, ?, default.
+  - Cause: locals can't be set from outside the config at all (12 Nov entry above), and I forgot two real sources.
+  - Fix: strongest first: `-var`/`-var-file`, `*.auto.tfvars`, `terraform.tfvars`, `TF_VAR_name`, `default`.
+
+* **Mixed up `.terraform.lock.hcl` with the state lock** (19 Nov quiz)
+  - Symptom: I said the lock file stops two runs at once.
+  - Cause: same word, two things. `.terraform.lock.hcl` pins **provider versions + hashes** and is committed. `.tflock` locks the **state** and lives in the S3 bucket only during plan/apply.
+  - Fix: lock file = which providers; `.tflock` = who is writing state.
+
+* **A second `terraform {}` block in `dynamodb.tf`** (19 Nov)
+  - Symptom: I copied an example's `terraform { required_providers { aws = ... } }` into my new file.
+  - Cause: Terraform reads every `.tf` file in the folder as one config, and `main.tf` already declares the AWS provider. Several `terraform {}` blocks are allowed; declaring the same provider twice isn't.
+  - Fix: delete it. Settings live once, in `main.tf`; new files hold only resources.
+
+* **IAM file full of type mistakes** (19 Nov)
+  - Symptom: `actions = "sts:AssumeRole"`, `resources = "aws_dynamodb_table.visits.arn"`, `assume_role_policy = "assume"`, `role = aws_iam_role.lambda`, `policy = data...permissions`, `effect = "allow"`, and no `principals` block.
+  - Cause: three patterns. `actions`/`resources` always take a **list**. Quotes turn a reference into **plain text** (only `"${...}:*"` builds a string). Some references need an **attribute** (`.json`, `.id`, `.arn`). Also `"Allow"` is case sensitive, and a trust policy with no `principals` says nobody may use the role.
+  - Fix: `["..."]`, no quotes around references, `.json`/`.id`, `"Allow"`, and `principals { type = "Service" identifiers = ["lambda.amazonaws.com"] }`.
+
+* **Function name typo: `visit-coutner`** (19 Nov, caught in review)
+  - Symptom: `function_name = "visit-coutner"`, while the log group is `/aws/lambda/visit-counter`.
+  - Cause: Lambda logs to `/aws/lambda/<function name>`, so it would look for a group that doesn't exist, and it has no `logs:CreateLogGroup` permission to make one. Result: **no logs at all**, while the function still works, so nothing looks wrong.
+  - Fix: one name in one place. Better: a `local.function_name` used by both the function and the log group.
+
+* **Output read `function_url` from the wrong resource** (19 Nov)
+  - Symptom: `value = aws_lambda_function.counter.function_url`.
+  - Cause: the URL is its own resource, `aws_lambda_function_url`, so the attribute lives there.
+  - Fix: `aws_lambda_function_url.counter.function_url`. Check the "Attributes Reference" of the resource I think owns it.
+
+* **`plan` failed: `could not archive missing file: ./src/app.py`** (19 Nov)
+  - Symptom: `Error: Archive creation error` on `data.archive_file.lambda`.
+  - Cause: the handler code was in chat, never saved to disk (same lesson as the empty Dockerfile).
+  - Fix: `mkdir -p src`, save `src/app.py`, `cat src/app.py` before `plan`.
+
+* **Predicted `plan` would add 2** (19 Nov)
+  - Symptom: it said `Plan: 8 to add`.
+  - Cause: I counted only the file I'd just written and half-thought `init` resets things. Nothing in the root had been applied (Wednesday's apply was empty), and `init` never touches state.
+  - Fix: count every `resource` block in the folder that isn't in state yet: table, log group, role, role policy, function, URL and 2 permissions = 8. Data blocks don't count.
+
 ## AWS
 
 * **Expected the classic root sign-up on the new account** (16 Nov)
@@ -417,6 +467,11 @@ Format: symptom, cause, fix.
   - Symptom: I predicted `terraform plan` would fail with "no valid credentials" because 15 minutes had passed.
   - Cause: the login session lasts up to 12 hours. The temporary credentials inside it refresh about every 15 minutes.
   - Fix: if the CLI or Terraform can't find credentials, run `aws login --profile lab` again.
+
+* **Predicted `ConcurrentExecutions` would be 1** (19 Nov)
+  - Symptom: `get-account-settings` showed `400`.
+  - Cause: I mixed up DynamoDB's 1 RCU/1 WCU (table capacity) with Lambda concurrency (how many copies of functions run at the same moment), then with the 1M free requests a month.
+  - Fix: three different numbers from two services. Reserved concurrency is limited to the unreserved amount minus 100, so up to 300 here.
 
 ## README
 
