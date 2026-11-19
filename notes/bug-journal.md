@@ -270,6 +270,16 @@ Format: symptom, cause, fix.
   - Cause: every instruction after `USER` runs as that user, and installing packages needs root. (Caught in review, before it ran.)
   - Fix: root work first, then `USER appuser` as the last step before `CMD`.
 
+* **Bootstrap check placed after Trivy** (18 Nov)
+  - Symptom: in `aws-serverless-visit-counter`'s `ci.yml`, the bootstrap `init` + `validate` step came after the Trivy scan, so a Trivy failure would skip it.
+  - Cause: a failed step skips every step after it (the implicit `success() &&`). A red scan would hide whether bootstrap still validates.
+  - Fix: move the bootstrap step **above** Trivy, so all the checks that can't break anything run first.
+
+* **Wrong version in a SHA comment** (18 Nov)
+  - Symptom: an action pinned by SHA had a comment with `6.73.0`.
+  - Cause: I copied the AWS provider's version from the lock file, not the action's release tag.
+  - Fix: the comment must be that action's tag. Verify the pair with `git ls-remote https://github.com/<owner>/<action> | grep <sha>`, which prints the tag the SHA belongs to.
+
 ## Terraform
 
 * **`plan` showed `0777` permissions for a `local_file`**
@@ -358,6 +368,21 @@ Format: symptom, cause, fix.
   - Symptom: `plan` said `No changes. Your infrastructure matches the configuration.`
   - Cause: plan compares the config with the state. Nothing was applied, so both were empty. If the group had been applied, the state remembers it and deleting the block plans a destroy (`0 to add, 0 to change, 1 to destroy`). At wrap-up I still answered "no changes" for the applied case.
   - Fix: before typing `yes`, read every `-` line. Re-test tomorrow.
+
+* **`tfplan` missing from `.gitignore`** (18 Nov)
+  - Symptom: the first `.gitignore` covered `.terraform/`, state and `*.tfvars`, but not the saved plan file.
+  - Cause: I listed what I knew from the 12 Nov parking-lot line, before using `plan -out=tfplan`. A saved plan holds the full config and values, sensitive ones included.
+  - Fix: add `tfplan` to `.gitignore`. Check with `git status` after the first `plan -out`.
+
+* **Thought renaming a resource label only breaks references** (19 Nov teach-back)
+  - Symptom: I said renaming `aws_s3_bucket.state` would just give "reference not found" errors, avoided by picking easy names.
+  - Cause: the label is the resource's address in state. Once references are fixed, the old address is gone and a new one appears, so `plan` shows **destroy + create**: the state bucket itself. `plan` shows that; it doesn't stop it.
+  - Fix: a `moved { from = aws_s3_bucket.state  to = aws_s3_bucket.<new> }` block, so the plan says `0 to destroy`.
+
+* **Thought the backend can't take a variable because the name wouldn't match** (19 Nov teach-back)
+  - Symptom: I said a variable's value wouldn't match the real bucket name.
+  - Cause: it's about timing, not the value. The backend is read **during** `init`, before any variable or resource is evaluated.
+  - Fix: literal values only in the `backend` block; anything that changes goes in `-backend-config`.
 
 ## AWS
 

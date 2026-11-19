@@ -42,7 +42,6 @@ One line per tangent. Friday slot: explore the best two.
 - January CKA prep: use Class Central to pick one free Kubernetes course (for example a Linux Foundation intro).
 - "Close account" button (10 Nov): why is it visible to my IAM admin `Learning` on a standalone account, when AWS docs say only root can close it? Never click it; look only.
 - "1 notice" in the Annotations of CI run #20 (10 Nov): what does it say? (14 Nov) Run #26's notice was the Trivy version notice; check whether run #20's is the same kind.
-- Remote state backends (11 Nov): where do teams keep state so it isn't on one laptop and isn't in Git?
 - `terraform plan -out` (11 Nov): save a plan and apply exactly that plan (needed in CI).
 - Why does `local_file` plan a *create* (not an update) after I edit the file by hand? (11 Nov) Its `id` is the SHA1 of the content; check the provider docs.
 - Least-privilege IAM policy (12 Nov): write one for Project 2 instead of using `AdministratorAccess` for everything. (16 Nov) Start with the Lambda execution role: only `dynamodb:GetItem`/`UpdateItem` on the one table, plus CloudWatch Logs.
@@ -51,10 +50,9 @@ One line per tangent. Friday slot: explore the best two.
 - `terraform providers lock` (12 Nov): lock hashes for other platforms, so CI on a different OS accepts the same lock file.
 - `aws_iam_policy_document` (12 Nov): build policy JSON in Terraform (it makes no AWS call).
 - Roles and assuming a role (12 Nov): how a person or service takes on a role temporarily, and what `sts:AssumeRole` does.
-- `.gitignore` for Terraform (12 Nov): `~/dev/lab/terraform` isn't a Git repo, so state can't be committed by accident. When Project 2 becomes a repo, create `.gitignore` (`.terraform/`, `*.tfstate`, `*.tfstate.backup`, `*.tfvars`) before the first commit, and commit `.terraform.lock.hcl`.
 - Cross-zone traffic in AWS (12 Nov): what it costs and when it matters (zone IDs vs names).
 - `aws login` with Terraform (12 Nov): it worked directly with provider v6.73.0 and no fallback command. Record the version if it ever stops working. (17 Nov) Worked again with `profile = "lab"` on v6.73.0.
-- Update the Trivy version CI runs (14 Nov): the action pins Trivy 0.70.0 and 0.76.2 exists. How do I bump it (a newer action release, or the action's version input), how do I verify the new release, and why not just chase "newest" after the March attack?
+- Update the Trivy version CI runs (14 Nov): the action pins Trivy 0.70.0 and 0.76.2 exists. How do I bump it (a newer action release, or the action's version input), how do I verify the new release, and why not just chase "newest" after the March attack? (18 Nov) Project 2's CI also ran 0.70.0, and the scan said a CloudFront rule was skipped, so the old version misses checks too.
 - `.trivyignore` (14 Nov): the file format, and when ignoring a CVE is acceptable. Rule: the CVE ID, a written reason and a review date.
 - Weekly scheduled scan of the published image (14 Nov): a `schedule:` trigger, so a new CVE shows up without waiting for a PR.
 - CVE titles that don't match the library (14 Nov): CVE-2026-76844's title talked about `webpack-dev-middleware` for a zlib finding. Check the avd.aquasec.com page and the Debian security tracker to see which is right.
@@ -66,12 +64,17 @@ One line per tangent. Friday slot: explore the best two.
 - Compose variables, hands-on (17 Nov): put the same variable in the shell, `.env`, `app.env` and `environment:` one at a time, predict which value reaches the container, then check with `docker compose config` and `docker compose exec app env`.
 - `${REDIS_HOST:-redis}` (17 Nov): a default inside `compose.yaml`, so `.env` is optional for that line. `app.py`'s `.get("REDIS_HOST", "redis")` does not fall back when the variable is set but empty.
 - README sections 5 and 6 (17 Nov): security decisions (read-only, tmpfs `noexec`, `cap_drop: ALL`, `no-new-privileges`, memory and pid limits, healthchecks, `init`, port on `127.0.0.1`, Compose secret, commit-SHA tag, Trivy gate, SHA-pinned action, protected `main`) and what I learned. A second small PR.
-- `trivy config` (17 Nov): scans Terraform for misconfigurations without an AWS login. Part of Project 2's CI.
 - Free Tier usage (17 Nov): watch Lambda and DynamoDB against their limits with the Billing console's Free Tier page or the `GetFreeTierUsage` API.
 - DynamoDB billing mode (17 Nov): always-free covers provisioned capacity (25 RCU and 25 WCU), reportedly not on-demand. Check the pricing page before building on Thursday.
 - Public Lambda function URL (17 Nov): how to stop abuse (reserved concurrency, or `AWS_IAM` auth instead of a public URL). Decide Thursday.
 - What happens on 16 May 2027 (17 Nov): the Free plan ends, with 90 days to upgrade before the account closes. Where does Project 2 live afterwards (my own account)?
 - Song metadata service (17 Nov): after Project 2. The phone detects new songs and sends names to a Lambda, which looks up metadata (for example MusicBrainz; check its rate limits) and stores it in DynamoDB. The phone does the tagging. No audio uploads.
+- `profile = "lab"` in the backend block (18 Nov): it ties the code to my laptop's profile name. Use `AWS_PROFILE=lab` or `-backend-config` instead.
+- Narrower Trivy ignore (18 Nov): `AWS-0132` in `.trivyignore` skips that rule for the whole repo, so a future bucket is skipped silently. A `.trivyignore.yaml` can limit it to one path.
+- `moved` blocks (19 Nov): rename a resource label without destroy + create. Try one on a throwaway resource.
+- `prevent_destroy` on the state bucket (18 Nov): a `lifecycle` setting that makes any plan to delete it fail. Worth it, and how does it fit the Saturday `destroy` rehearsal?
+- Disaster recovery for bootstrap (19 Nov): if the laptop dies, only bootstrap's local state is lost. Write the four `terraform import` commands (bucket, versioning, public access block, encryption) in the README.
+- Link `aws-serverless-visit-counter` from `devops-journey/projects/README.md` (18 Nov).
 
 ## Answered
 
@@ -91,3 +94,8 @@ One line per tangent. Friday slot: explore the best two.
 - Delete the deactivated root access key? (Mon 16 Nov) Done: deleted after a week inactive (deactivated 9 Nov). A deleted key can't be switched back on by someone who gets into root, and root should have no access keys at all.
 - Does GitHub Actions OIDC work in this account type? (Tue 17 Nov) No. The account's guardrail SCP has an explicit Deny on `iam:*Provider*`, so the OIDC provider can't be created (`aws iam list-open-id-connect-providers` → `AccessDenied ... explicit deny in a service control policy`). An explicit Deny above the account beats any Allow inside it. Project 2 uses the "A+" workflow: CI without an AWS login, `plan` and `apply` by hand, OIDC code written but off.
 - `local_sensitive_file`: what does it hide? (Tue 17 Nov) The same as `sensitive = true`: it keeps the content out of plan and apply output, but the state still holds it in clear text. I tested this with a sensitive variable, not with that resource. State never goes in Git.
+- Remote state backends (11 Nov → built Wed 18 Nov): an S3 bucket with versioning, all public access blocked and encryption, and `use_lockfile = true` (a `.tflock` object next to the state during plan/apply; no DynamoDB, Terraform 1.10+). The bucket is made by a small `bootstrap/` config with local state, because a config can't keep its state in a bucket it creates.
+- `.gitignore` for Terraform (12 Nov → done Wed 18 Nov): written before the first commit of `aws-serverless-visit-counter`: `.terraform/`, `*.tfstate`, `*.tfstate.backup`, `*.tfvars`, plus `tfplan`. `.terraform.lock.hcl` is committed.
+- `trivy config` (17 Nov → in CI Wed 18 Nov): scans the Terraform without an AWS login, fails on HIGH/CRITICAL (`exit-code 1`). `AWS-0132` (customer-managed KMS key) ignored with a written reason: about USD 1 a month, for a learning bucket.
+- Does the provider count in `Plan: N to add`? (Wed 18 Nov) No. Only resources are counted; a provider is a plugin, not something that's created.
+- When does an output show a value at plan time? (Wed 18 Nov) When it comes from something I wrote (a literal like the bucket name). `(known after apply)` only when AWS generates it (ARN, ID).
