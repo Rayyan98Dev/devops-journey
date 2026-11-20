@@ -98,6 +98,11 @@ Format: symptom, cause, fix.
   - Cause: `--prune` only removes `origin/<branch>` copies of branches deleted on GitHub. It doesn't update my local `main` or delete my local branch.
   - Fix: `git switch main`, `git pull`, `git fetch --prune`, `git branch -d <branch>`. Check with `git branch -a`.
 
+* **Branch name typos: `add-odic` and a PR compare on `fix-regionremote`** (20 Nov)
+  - Symptom: a branch called `add-odic`, and GitHub's compare page said "There isn't anything to compare".
+  - Cause: typing slips. The compare box had two words stuck together, so it named a branch that doesn't exist.
+  - Fix: `git branch -m add-oidc` before pushing; on the compare page pick the branch from the list instead of typing it.
+
 ## Docker
 
 * **Phone reached a container port I never opened**
@@ -290,6 +295,11 @@ Format: symptom, cause, fix.
   - Cause: I copied the AWS provider's version from the lock file, not the action's release tag.
   - Fix: the comment must be that action's tag. Verify the pair with `git ls-remote https://github.com/<owner>/<action> | grep <sha>`, which prints the tag the SHA belongs to.
 
+* **Read Trivy's `0` as "nothing found"** (20 Nov)
+  - Symptom: the CI report table showed `0` for every file, and I took it as a clean bill of health.
+  - Cause: the step runs with `severity: HIGH,CRITICAL`, so the table only counts those two levels. MEDIUM and LOW findings are filtered out before it's printed, and they never fail CI.
+  - Fix: read `0` as "0 HIGH/CRITICAL". To see the rest, scan without the filter (Trivy isn't installed on the laptop yet: parking lot).
+
 ## Terraform
 
 * **`plan` showed `0777` permissions for a `local_file`**
@@ -434,6 +444,51 @@ Format: symptom, cause, fix.
   - Cause: I counted only the file I'd just written and half-thought `init` resets things. Nothing in the root had been applied (Wednesday's apply was empty), and `init` never touches state.
   - Fix: count every `resource` block in the folder that isn't in state yet: table, log group, role, role policy, function, URL and 2 permissions = 8. Data blocks don't count.
 
+* **First apply went to Frankfurt and hit an SCP deny** (20 Nov)
+  - Symptom: `AccessDeniedException ... dynamodb:CreateTable on ... eu-central-1 ... explicit deny in a service control policy`, same for `logs:CreateLogGroup`. The IAM role was created.
+  - Cause: the root config had **no `provider "aws"` block**. The `region` and `profile` inside `backend "s3"` only say where state lives; the provider fell back to the `default` profile's region (`eu-central-1`). The account's guardrails deny Frankfurt. IAM is global, so the role went through.
+  - Fix: `provider "aws" { region = "eu-north-1"  profile = "lab" }` in `main.tf`. The ARNs in an error show the region, so read them.
+
+* **Partial apply, then a stale plan** (20 Nov)
+  - Symptom: after the failed apply, the saved `tfplan` couldn't be used again.
+  - Cause: a saved plan is tied to the state it was made from. The failed apply still created the role, so the state changed and the plan was stale. It happened again after the 409 below.
+  - Fix: after any apply that fails part-way, `terraform plan -out=tfplan` again and read what's left.
+
+* **409 `ResourceConflictException`: concurrent update on the function** (20 Nov)
+  - Symptom: `adding Lambda Function URL (visit-counter) permission ... StatusCode: 409 ... concurrent update operation`.
+  - Cause: Lambda allows one change at a time per function, and Terraform creates up to 10 resources in parallel. The URL resource (which adds its own public permission for `NONE`) and my two `aws_lambda_permission` resources changed the function's policy at the same moment. The URL was left **tainted**.
+  - Fix: re-plan (it showed the URL as destroy + create), then `terraform apply -parallelism=1 tfplan`. Saturday: check `aws lambda get-policy` for duplicate statements.
+
+* **Predicted `apply tfplan` would ask for `yes`** (20 Nov)
+  - Symptom: it ran straight away.
+  - Cause: a saved plan is already the reviewed decision; reviewing it in the PR is the "yes".
+  - Fix: read the plan *before* saving it, because nothing asks again.
+
+* **Thought merging would make `tfplan` stale** (20 Nov)
+  - Symptom: I said I'd have to re-plan after merging `fix-region`.
+  - Cause: the plan was made from the same code that was merged, and the state hadn't changed. Code moving onto `main` doesn't touch state.
+  - Fix: re-plan only if `main` gained *other* changes, or the state changed since the plan.
+
+* **Thought adding tags replaces resources** (20 Nov)
+  - Symptom: I predicted `-/+`; the plan showed `~ update in-place` for all of them.
+  - Cause: tags are labels, and changing a label never rebuilds the thing. The plan also said 5 to change, but apply did 4: the role policy's data source was "read during apply", so Terraform showed a cautious maybe, which turned out to be no change.
+  - Fix: look for `~` vs `-/+` and `# forces replacement`. A "will be read during apply" data source can make a plan overcount.
+
+* **Trust-policy draft for OIDC** (20 Nov)
+  - Symptom: no `statement { }`, `prinicpals`, commas inside a block (`type = "Federated",`), the audience value in `variable`, `sts.amazon.com`, an unquoted `sub` key, and `github_trust.id[0].json`.
+  - Cause: a `condition` has three parts (`test`, `variable` = which claim as a string, `values` = allowed list); blocks take one setting per line; with `count` the index goes right after the name.
+  - Fix: `data.aws_iam_policy_document.github_trust[0].json`, and conditions on `token.actions.githubusercontent.com:aud` and `:sub`.
+
+* **`epo:` instead of `repo:` in the `sub` values** (20 Nov, caught in review)
+  - Symptom: `"epo:Rayyan98Dev/aws-serverless-visit-counter:pull_request"`.
+  - Cause: a typo inside a value. `validate` only checks it's a string, and AWS would accept it, but no token would ever match: PR runs would be refused with a vague "not authorized".
+  - Fix: `repo:`. Typos inside values are the ones no tool catches; read them.
+
+* **Said a `count` resource is referenced "as a normal block"** (20 Nov)
+  - Symptom: wrong prediction for how to get the OIDC provider's ARN.
+  - Cause: `count` turns a resource into a list, even with one item.
+  - Fix: `aws_iam_openid_connect_provider.github[0].arn`, and give anything that uses `[0]` the same `count`, so it never indexes an empty list.
+
 ## AWS
 
 * **Expected the classic root sign-up on the new account** (16 Nov)
@@ -472,6 +527,12 @@ Format: symptom, cause, fix.
   - Symptom: `get-account-settings` showed `400`.
   - Cause: I mixed up DynamoDB's 1 RCU/1 WCU (table capacity) with Lambda concurrency (how many copies of functions run at the same moment), then with the 1M free requests a month.
   - Fix: three different numbers from two services. Reserved concurrency is limited to the unreserved amount minus 100, so up to 300 here.
+
+* **Thought OIDC is an AWS login for the terminal** (20 Nov)
+  - Symptom: I described OIDC as an AWS service that runs on my laptop.
+  - Cause: that's `aws login`. OIDC is an open standard: GitHub signs a short-lived token for each workflow run ("repo X, branch main"), AWS trusts GitHub's signature through the OIDC provider, and the run swaps the token for temporary credentials (`sts:AssumeRoleWithWebIdentity`). Nothing stored in GitHub secrets.
+  - Fix: one-line model: "GitHub vouches for the run, AWS trusts GitHub."
+    - **Check:** `"Service"` principal = an AWS service (Lambda). `"Federated"` = an identity from outside AWS that AWS trusts (GitHub).
 
 ## README
 
