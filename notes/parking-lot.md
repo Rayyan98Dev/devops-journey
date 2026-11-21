@@ -66,7 +66,7 @@ One line per tangent. Friday slot: explore the best two.
 - Free Tier usage (17 Nov): watch Lambda and DynamoDB against their limits with the Billing console's Free Tier page or the `GetFreeTierUsage` API.
 - What happens on 16 May 2027 (17 Nov): the Free plan ends, with 90 days to upgrade before the account closes. Where does Project 2 live afterwards (my own account)? (19 Nov) The URL is public, so on a Paid plan abuse could cost real money: destroy it or add a budget alarm before May.
 - Song metadata service (17 Nov): after Project 2. The phone detects new songs and sends names to a Lambda, which looks up metadata (for example MusicBrainz; check its rate limits) and stores it in DynamoDB. The phone does the tagging. No audio uploads.
-- `profile = "lab"` in the backend block (18 Nov): it ties the code to my laptop's profile name. Use `AWS_PROFILE=lab` or `-backend-config` instead. (20 Nov) Now also in the `provider` block; change both together.
+- `profile = "lab"` in the backend block (18 Nov): it ties the code to my laptop's profile name. Use `AWS_PROFILE=lab` or `-backend-config` instead. (20 Nov) Now also in the `provider` block; change both together. (21 Nov) Also blocks OIDC: on a runner `init` fails with "failed to get shared config profile, lab".
 - Narrower Trivy ignore (18 Nov): `AWS-0132` in `.trivyignore` skips that rule for the whole repo, so a future bucket is skipped silently. A `.trivyignore.yaml` can limit it to one path.
 - `moved` blocks (19 Nov): rename a resource label without destroy + create. Try one on a throwaway resource.
 - `prevent_destroy` on the state bucket (18 Nov): a `lifecycle` setting that makes any plan to delete it fail. Worth it, and how does it fit the Saturday `destroy` rehearsal?
@@ -77,10 +77,10 @@ One line per tangent. Friday slot: explore the best two.
 - boto3 basics (19 Nov): the handler was given, not written by me. Learn `boto3.resource` vs `boto3.client`, what `update_item` and `UpdateExpression` (`ADD`, `SET`) do, and `ReturnValues`. Why did the zip need no `requirements.txt`? (The Python runtime already includes boto3; check which version.)
 - Trivy on the laptop (20 Nov): not installed (`command not found`). Run it through Docker with a pinned, verified image to see the MEDIUM/LOW findings CI filters out, then sort them: fix, ignore with a reason, or park.
 - Which credentials did the provider use with no provider block? (20 Nov) It got the `lab` role but the `default` profile's region. Plain `aws sts get-caller-identity` (default profile) now fails with `signin:CreateOAuth2Token`. Is `default` pointing at my brother's account too? Fix or remove that profile.
-- Duplicate URL permissions (20 Nov): `aws_lambda_function_url` with `NONE` adds its own public permission, and I also wrote two `aws_lambda_permission` resources. Check `aws lambda get-policy` and remove what's duplicated.
 - Logging from my own code (20 Nov): the log group only has Lambda's `START`/`END`/`REPORT` lines. Add a `print()` or `logging` line per request and see it in `aws logs tail`.
 - Lambda memory (20 Nov): `Max Memory Used: 90 MB` of 128. Watch it if the handler grows.
-- Finish OIDC (20 Nov): CI role permissions (state bucket + read-only) and a workflow job behind the switch. Saturday.
+- Project 2 README (21 Nov → Mon 23 Nov 07:30): no live URL now (destroyed), so show the `curl` evidence (1 → 7), the one-line rebuild, the A+ workflow with the SCP error, OIDC off and the two switches, what must change to turn it on (`profile`), the `ReadOnlyAccess` trade-off, and the disaster-recovery imports.
+- Wall cheat sheet (21 Nov): the things I keep forgetting (HCL lists/quotes/attributes, `count` + `[0]`, condition = test/variable/values, plan → PR → apply tfplan, masking, post-merge cleanup). One page, printed.
 
 ## Answered
 
@@ -111,3 +111,8 @@ One line per tangent. Friday slot: explore the best two.
 - Why is `table = ...` outside `handler`? (Thu 19 Nov) Code outside the handler runs once when a new copy of the function starts; later requests to that copy reuse the connection.
 - Cold starts (19 Nov → measured Fri 20 Nov): first request `Init Duration: 470 ms` + `Duration: 292 ms` (billed 762 ms, startup included); second request on the same copy 23 ms, no init. About 20× faster warm, because the copy (and the `table` object outside `handler`) is reused. One log stream = one copy served both.
 - Why tag resources? (Fri 20 Nov) Cost per project in billing, finding everything with Tag Editor (useful before `destroy`), ownership in a shared account, `managed-by = terraform` warns people not to edit by hand, and automation can act on tags. `default_tags` on the provider means a new resource can't be forgotten; a resource's own tag wins on the same key.
+- Duplicate URL permissions (20 Nov → Sat 21 Nov): yes, 4 statements in two pairs. The URL resource with `NONE` adds both itself; removed my two `aws_lambda_permission` resources and left a comment. `get-policy` now lists only `FunctionURLAllowPublicAccess` and `FunctionURLAllowInvokeAction`.
+- Finish OIDC (20 Nov → Sat 21 Nov): CI role permissions (state key, `.tflock` read/write/delete, `ReadOnlyAccess`) and job `terraform-plan-oidc` (`needs: terraform-checks`, `if: vars.ENABLE_OIDC == 'true'`, `id-token: write`, `configure-aws-credentials` pinned to v6.3.0 by SHA, `-input=false`). Off twice: Terraform `count` and the repo variable. The PR showed the job as Skipped.
+- Stale plan vs drift (Sat 21 Nov): stale = the **state** changed after the plan was saved (Terraform refuses it, re-plan). Drift = the **real infrastructure** changed outside Terraform. The config is the source of truth for both.
+- Ctrl+V in the VSCodium terminal (Sat 21 Nov): in bash Ctrl+V is "insert the next key literally", hence the garbage. Keybinding `{ "key": "ctrl+v", "command": "workbench.action.terminal.paste", "when": "terminalFocus" }`.
+- Keep or destroy Project 2 (17 Nov → Sat 21 Nov): **destroyed**. Nothing public left running; Kubernetes weeks run locally. Rebuild with one plan + apply from `main` (new URL, count from 1). The state bucket stays.
