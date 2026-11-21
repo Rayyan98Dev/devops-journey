@@ -103,6 +103,11 @@ Format: symptom, cause, fix.
   - Cause: typing slips. The compare box had two words stuck together, so it named a branch that doesn't exist.
   - Fix: `git branch -m add-oidc` before pushing; on the compare page pick the branch from the list instead of typing it.
 
+* **Edited `lambda.tf` on an old branch** (21 Nov)
+  - Symptom: the prompt still said `(oidc-workflow)` while I made the next change.
+  - Cause: I didn't switch after pushing; the earlier PR wasn't merged yet.
+  - Fix: merge the old PR, then `git stash`, `git switch main && git pull`, `git switch -c <new>`, `git stash pop`. Read the branch in the prompt before editing.
+
 ## Docker
 
 * **Phone reached a container port I never opened**
@@ -300,6 +305,16 @@ Format: symptom, cause, fix.
   - Cause: the step runs with `severity: HIGH,CRITICAL`, so the table only counts those two levels. MEDIUM and LOW findings are filtered out before it's printed, and they never fail CI.
   - Fix: read `0` as "0 HIGH/CRITICAL". To see the rest, scan without the filter (Trivy isn't installed on the laptop yet: parking lot).
 
+* **Thought the OIDC job needs `contents: write`** (21 Nov)
+  - Symptom: my answer for the permission that gets an OIDC token.
+  - Cause: `contents: write` lets a job push code. The token comes from `id-token: write`.
+  - Fix: `permissions: { id-token: write, contents: read }`, nothing more.
+
+* **Thought CI would fall back to the `default` profile** (21 Nov)
+  - Symptom: I said `terraform init` in the OIDC job would use `default` and hit an access denied.
+  - Cause: when a profile is named, nothing falls back. The runner has no `~/.aws`, so `profile = "lab"` stops `init` with "failed to get shared config profile, lab", before credentials or region matter.
+  - Fix: before switching OIDC on, remove `profile` from the code and use `AWS_PROFILE=lab` on the laptop.
+
 ## Terraform
 
 * **`plan` showed `0777` permissions for a `local_file`**
@@ -368,6 +383,7 @@ Format: symptom, cause, fix.
   - Cause: I didn't scan the paste before sending it.
   - Fix: look for the account number and the ARN before pasting. It isn't a password, but it stays out of chat and screenshots.
   - Happened again on 17 Nov, in an `AccessDenied` error message that names the account twice. Read error pastes too, and swap the number for `<account>`.
+  - Again 21 Nov, in `aws login` output (`Updated profile lab to use arn:aws:sts::<account>:...`), with the sign-in URL. Pipe it through `sed -E 's/[0-9]{12}/<account>/g'` and never paste the URL.
 
 * **Predicted a warning for a sensitive value in an output** (17 Nov)
   - Symptom: I guessed `plan` would warn. It stopped with an error (`Output refers to sensitive values`).
@@ -488,6 +504,26 @@ Format: symptom, cause, fix.
   - Symptom: wrong prediction for how to get the OIDC provider's ARN.
   - Cause: `count` turns a resource into a list, even with one item.
   - Fix: `aws_iam_openid_connect_provider.github[0].arn`, and give anything that uses `[0]` the same `count`, so it never indexes an empty list.
+
+* **New OIDC blocks without `count`** (21 Nov)
+  - Symptom: `Error: Unexpected resource instance key ... github_ci_state[0] ... does not have "count" or "for_each" set`.
+  - Cause: I referenced `[0]` on a data block that wasn't a list, and the new resources pointed at `github_ci[0]`, an empty list while the switch is off.
+  - Fix: `count = var.enable_github_oidc ? 1 : 0` on every block that uses `[0]`. Terraform's error names the symptom ("remove the index"), not my real fix.
+
+* **Thought `plan` needs no write access** (21 Nov)
+  - Symptom: I said only `apply` writes, so a CI plan role needs read-only S3.
+  - Cause: `plan` takes the state lock too (`Acquiring state lock` / `Releasing state lock`), which writes and deletes the `.tflock` object.
+  - Fix: the CI role gets `GetObject` on the state key, plus `GetObject`/`PutObject`/`DeleteObject` on the `.tflock` key.
+
+* **Duplicate public permissions on the function** (21 Nov)
+  - Symptom: `aws lambda get-policy` showed 4 statements in two identical pairs: mine (`terraform-…`) and `FunctionURLAllowPublicAccess` / `FunctionURLAllowInvokeAction`.
+  - Cause: `aws_lambda_function_url` with `authorization_type = "NONE"` adds both public permissions itself. My two `aws_lambda_permission` resources repeated them (and raced them: the 409 on 20 Nov).
+  - Fix: removed my two resources (plan `2 to destroy`), left a comment saying the URL resource adds them. Risk if missed: deleting my resources would *not* close public access.
+
+* **Destroy rehearsal predictions** (21 Nov)
+  - Symptom: I predicted 8 to destroy, and that a re-apply would continue the count "because destroy only affects the laptop".
+  - Cause: two permissions were already removed (6 left). `destroy` deletes things **in AWS**: the table and its count go, and the function URL is random, so a rebuild gets a new URL. Root `destroy` never touches the state bucket (bootstrap's).
+  - Fix: `terraform state list` shows what Terraform manages (not the `.tf` files, which include `count = 0` blocks). After the destroy, the old URL answers `403` and `state list` is empty.
 
 ## AWS
 
