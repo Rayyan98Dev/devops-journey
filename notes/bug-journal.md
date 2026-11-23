@@ -26,6 +26,11 @@ Format: symptom, cause, fix.
 
 ## Python
 
+* **Thought `boto3...Table(...)` creates a table** (23 Nov review)
+  - Symptom: I said `table = ...` sits outside `handler` "so a new table isn't made with every request, or the count would always be 1".
+  - Cause: `boto3.resource("dynamodb").Table(name)` makes a Python **handle** that points at a table that already exists (Terraform made it). It creates nothing in AWS.
+  - Fix: it's outside `handler` so it's built once per cold start and reused by warm requests (470 ms first request vs 23 ms after). And `ADD visits :one` on a missing item **creates** it with `visits = 1`, so no setup step is needed.
+
 * **Argument count one too high**
   - Symptom: `$#` and `len(sys.argv)` gave different numbers.
   - Cause: Python stores command-line args in a list, and the script name is the first item.
@@ -314,6 +319,22 @@ Format: symptom, cause, fix.
   - Symptom: I said `terraform init` in the OIDC job would use `default` and hit an access denied.
   - Cause: when a profile is named, nothing falls back. The runner has no `~/.aws`, so `profile = "lab"` stops `init` with "failed to get shared config profile, lab", before credentials or region matter.
   - Fix: before switching OIDC on, remove `profile` from the code and use `AWS_PROFILE=lab` on the laptop.
+  - **Again 23 Nov** (recall quiz Q4): same "falls back to default" answer. Third time, so it's on the cheat sheet: **a named profile that doesn't exist = stop, never fallback.**
+
+* **Wrong names: `token-id` and `vars.ENABLED`** (23 Nov review)
+  - Symptom: I said the OIDC permission is `token-id: write` and the switch is `vars.ENABLED`.
+  - Cause: remembering the idea, not the spelling. YAML and GitHub don't guess: a wrong key is ignored or invalid, and a wrong variable name is simply empty, so the `if:` is false and the job is skipped with no error.
+  - Fix: `id-token: write` and `vars.ENABLE_OIDC`. Copy names from the file, don't retype them.
+
+* **Thought turning OIDC on means removing `-backend=false`** (23 Nov review)
+  - Symptom: my steps to switch OIDC on were "set the variable, set the repo variable, remove `-backend=false`".
+  - Cause: `-backend=false` belongs to `terraform-checks`, the job that has **no credentials** (it's what lets `init` succeed without them). The OIDC job already runs a plain `init`. I also had cause and effect backwards: no login → so `-backend=false`, not the other way round.
+  - Fix: the real order is (1) remove `profile = "lab"`, (2) apply `enable_github_oidc = true` **by hand** (CI can't create its own way in), (3) set repo variables `AWS_ACCOUNT_ID` and `ENABLE_OIDC=true`, (4) open a PR and watch the job.
+
+* **Thought the OIDC job plans only because AWS would apply by itself** (23 Nov review)
+  - Symptom: I asked whether there's no `apply` step because AWS would run it from its end.
+  - Cause: AWS never runs anything on its own. The CI role is read-only plus the state lock, so it *can't* apply.
+  - Fix: no apply in CI by design here. A real pipeline would apply on merge with a separate, stronger role, usually behind an approval gate.
 
 ## Terraform
 
@@ -525,6 +546,46 @@ Format: symptom, cause, fix.
   - Cause: two permissions were already removed (6 left). `destroy` deletes things **in AWS**: the table and its count go, and the function URL is random, so a rebuild gets a new URL. Root `destroy` never touches the state bucket (bootstrap's).
   - Fix: `terraform state list` shows what Terraform manages (not the `.tf` files, which include `count = 0` blocks). After the destroy, the old URL answers `403` and `state list` is empty.
 
+* **Mixed up code, state and real infrastructure** (23 Nov review, the root of most mistakes below)
+  - Symptom: I described drift as "the code no longer matches state", and mixed up what destroying bootstrap does with what losing the laptop does.
+  - Cause: Terraform has **three places**: **code** (`.tf` in Git, what I want), **state** (S3 for root, local file for bootstrap, what Terraform remembers), **real infrastructure** (AWS, what exists). `plan` compares all three.
+  - Fix: stale plan = **state** moved since the plan. Drift = **reality** moved (someone edited it in the console). Changed code = just my next change. Losing the laptop loses bootstrap's state only (import it back); destroying bootstrap deletes the **bucket** holding root's state, which orphans everything still running.
+
+* **Label vs real name, again** (23 Nov review)
+  - Symptom: I described `aws_s3_bucket.state` as "Terraform's state", and said `visits` in `aws_dynamodb_table.visits.arn` is the table's name.
+  - Cause: the label after the type is only Terraform's address. The bucket *resource* is called `state` but it's a bucket (real infrastructure) that *holds* state. The table's AWS name comes from `name = "visits"`; the label just happens to match.
+  - Fix: label = Terraform's name for the block; `name`/`bucket` argument = the real name in AWS. Same lesson as the 19 Nov rename entry.
+
+* **Read the public-access-block settings backwards** (23 Nov review)
+  - Symptom: I said all four rules were set to `false`.
+  - Cause: each setting reads "block this = yes". They're all `true`, which means locked down. Reading it backwards turns "nobody can make this public" into "anyone can".
+  - Fix: read the attribute name as a question ("block public ACLs?") and the value as the answer.
+
+* **Predicted `terraform destroy` in `bootstrap/` would succeed** (23 Nov review)
+  - Symptom: I said it would just delete the bucket.
+  - Cause: the bucket isn't empty (root's state file is still there after a root `destroy`, plus every old version), and there's no `force_destroy`, so AWS refuses with `BucketNotEmpty`. Destroy runs in **reverse dependency order**, so versioning, the public-access block and encryption go first and the bucket fails last.
+  - Fix: don't run it. Result would be a half-destroyed bucket, still there but less protected. `lifecycle { prevent_destroy = true }` makes the *plan* fail before anything is touched.
+
+* **Read `~> 6.0` as "6 and above"** (23 Nov review)
+  - Symptom: my answer for the provider version constraint.
+  - Cause: `~>` is the pessimistic operator: only the last number given may grow.
+  - Fix: `~> 6.0` = ≥ 6.0 and < 7.0, so a breaking 7.0 can't arrive by itself. `>= 1.10` on Terraform is because `use_lockfile` arrived in 1.10.
+
+* **Mixed up what `backend` and `provider` control** (23 Nov review)
+  - Symptom: I said bootstrap's backend works on a local file, and that the provider affects "resources in the S3 bucket".
+  - Cause: bootstrap has **no backend block at all** (local state is the default). Resources aren't in the bucket; only state is.
+  - Fix: `backend` = where **state** is read and written. `provider` = where and as whom **real resources** are created. Frankfurt on 20 Nov was a provider problem.
+
+* **Mapped the IAM blocks wrongly** (23 Nov review)
+  - Symptom: I said the two resources in `iam.tf` are the trust policies and the two data blocks are the permissions policies.
+  - Cause: data blocks only **write** JSON (no AWS call); resources **create** things in AWS and attach the JSON.
+  - Fix: `data.assume` = trust (attached by `aws_iam_role` via `assume_role_policy`); `data.permissions` = permissions (attached by `aws_iam_role_policy`). One-line model: **data writes the letter, resource posts it.** Same in `oidc.tf`: only `github_trust` is a trust policy; `github_ci_state` is permissions.
+
+* **Thought `main.tf` governs the other files** (23 Nov voice review)
+  - Symptom: I described `main.tf` as the file that controls the rest.
+  - Cause: Terraform reads **every** `.tf` file in the folder as one config; file names are only for tidiness. It never reads subfolders, which is why `bootstrap/` is a separate config.
+  - Fix: `main.tf` just holds settings for the whole folder (terraform block, backend, provider). And `iam.tf` only holds IAM: it **points at** the table and log group by ARN, it doesn't create them.
+
 ## AWS
 
 * **Expected the classic root sign-up on the new account** (16 Nov)
@@ -569,6 +630,17 @@ Format: symptom, cause, fix.
   - Cause: that's `aws login`. OIDC is an open standard: GitHub signs a short-lived token for each workflow run ("repo X, branch main"), AWS trusts GitHub's signature through the OIDC provider, and the run swaps the token for temporary credentials (`sts:AssumeRoleWithWebIdentity`). Nothing stored in GitHub secrets.
   - Fix: one-line model: "GitHub vouches for the run, AWS trusts GitHub."
     - **Check:** `"Service"` principal = an AWS service (Lambda). `"Federated"` = an identity from outside AWS that AWS trusts (GitHub).
+  - **23 Nov voice review:** I said the OIDC provider is what fetches the token and `client_id_list` is where the token is sent. GitHub issues the token on its own; the provider is AWS writing down "I trust tokens signed by GitHub". `client_id_list` is the **audience** AWS accepts (`sts.amazonaws.com`).
+
+* **Thought there's a separate "app" between the URL and Lambda** (23 Nov review)
+  - Symptom: my request path was "AWS routes it to the app, the app goes to Lambda, Lambda asks the app to print, the app stores the count".
+  - Cause: the Lambda function **is** the app; `app.py` is the code inside it.
+  - Fix: curl → function URL (resource policy: `InvokeFunctionUrl` + `InvokeFunction`) → Lambda runs `handler` (reserved concurrency 2) → takes on its role (trust policy) → `UpdateItem` on `visits` (permissions policy) → logs (permissions policy). Three checks: who may call the function, who may become the role, what the role may do.
+
+* **Thought ReadOnlyAccess risk = secrets printed in logs** (23 Nov review)
+  - Symptom: my answer for what `ReadOnlyAccess` means for the state file.
+  - Cause: nothing prints by itself. The risk is that **any run the trust policy accepts** (including `pull_request` runs) gets a role that can read every object in every bucket, state included.
+  - Fix: tighter = only the read actions `plan` needs for these resource types, plus the state key. In the README's known gaps.
 
 ## README
 
@@ -576,3 +648,8 @@ Format: symptom, cause, fix.
   - Symptom: an SSH clone address (`git@github.com:...`) and a test folder path, `down -v` as the normal stop command, "push the image to main", the Trivy scan missing from both flows, a merge flow labelled "On a PR run", and no reason why a PR doesn't push.
   - Cause: I wrote from my own setup, not a stranger's. An SSH address needs my key. `down -v` deletes the count I claim survives. `main` is a branch; the image goes to GHCR tagged with the commit SHA. The scan is the gate.
   - Fix: an https clone address, `down` (keeps the count) and `down -v` (deletes it) as separate lines, both flows including the scan, and one line on why a PR doesn't push (only reviewed, tested, merged code is published). Every command was tested from a clean clone.
+
+* **Project 2 had no README, and `docs/design.md` was empty** (23 Nov)
+  - Symptom: the repo zip had no `README.md`, and `docs/design.md` was 0 bytes.
+  - Cause: the design only lived in the tutor's project notes; the empty file was committed and never filled.
+  - Fix: README drafted 23 Nov from my own answers in the review; in the `add-readme` PR, fill `docs/design.md` or delete it. Check with `wc -c` that a "done" file actually has content.
