@@ -19,6 +19,21 @@ Format: symptom, cause, fix.
   - Cause: redirections run left to right, and `2>&1` copies where stdout points *at that moment*. Here stdout still pointed at the screen.
   - Fix: `> out.txt 2>&1`. Move stdout first, then copy it.
 
+* **`sudo kind` said "command not found"** (24 Nov)
+  - Symptom: predicted an authentication or key error; the real failure is `sudo: kind: command not found`. At wrap-up I still said it was about credentials, and that the working form is "piped into sudo".
+  - Cause: `sudo` swaps my `PATH` for its own short list (`secure_path`), and `~/.local/bin` isn't on it. Nothing to do with keys. In `sudo "$(command -v kind)" ...` **my shell** expands `$(...)` into the full path *before* sudo starts, so root is handed `/home/.../.local/bin/kind`. Nothing is piped, and it still runs as root.
+  - Fix: `sudo "$(command -v kind)" ...`. Programs from `dnf` live in `/usr/bin`, which is on both lists. Same rule as `>`: my shell does `$(...)` and redirections first, then runs the command.
+
+* **`sudo kind get kubeconfig > ~/.kube/config`: predicted root would own the file** (24 Nov)
+  - Symptom: `ls -l` showed `catto-laptop` as owner.
+  - Cause: the `>` is done by my own shell, as me, before `sudo` runs. `sudo` only ran kind.
+  - Fix: nothing to fix; it's what I want. `chmod 600`, because the kubeconfig holds the cluster's admin certificate and key.
+
+* **Ctrl-Z instead of Ctrl-C** (24 Nov)
+  - Symptom: a hanging `curl` turned into `[1]+  Stopped  curl http://10.244.0.5`.
+  - Cause: Ctrl-Z **pauses** a program and parks it as a background job; Ctrl-C cancels it.
+  - Fix: `jobs` lists it, `kill %1` ends it (or `fg` then Ctrl-C). Use `curl -m 3` so a dead address gives up by itself.
+
 * **Pasted a placeholder into the terminal** (17 Nov)
   - Symptom: `git clone <your repo's clone URL> /tmp/readme-test` hung and showed `>`.
   - Cause: `<` is a redirect, so the shell waited for input from a file.
@@ -642,7 +657,39 @@ Format: symptom, cause, fix.
   - Cause: nothing prints by itself. The risk is that **any run the trust policy accepts** (including `pull_request` runs) gets a role that can read every object in every bucket, state included.
   - Fix: tighter = only the read actions `plan` needs for these resource types, plus the state key. In the README's known gaps.
 
+## Kubernetes
+
+* **Thought the control plane is a separate thing from the node** (24 Nov, twice: prediction and teach-back)
+  - Symptom: I predicted a separate control plane, then `kubectl get nodes` showed one node with role `control-plane`, and `kubectl get pods -A` showed 9 pods before I'd made any.
+  - Cause: in a single-node kind cluster the one node **is** the control plane, and it also runs my pods. The control plane itself runs **as pods** in `kube-system`: `kube-apiserver`, `etcd`, `kube-scheduler`, `kube-controller-manager`; plus `coredns` ×2, `kube-proxy`, `kindnet` (CNI) and `local-path-provisioner`.
+  - Fix: "control plane" is a role. In production it's usually on its own machines; here it shares the node. `-A` = all namespaces.
+
+* **Expected `docker ps` to show my nginx pod** (24 Nov)
+  - Symptom: only `lab-control-plane` was listed.
+  - Cause: three layers: Docker → node container → **containerd** → pod containers (`CONTAINER-RUNTIME: containerd://...`). Docker can't see inside the node.
+  - Fix: `sudo docker exec lab-control-plane crictl ps` lists the pod containers.
+
+* **Expected the pod IP to be reachable from the laptop** (24 Nov)
+  - Symptom: `curl -m 3 http://10.244.0.5` timed out. I'd predicted the same range as the node (`172.18.x`) and that it would work "because 127.0.0.1 is self".
+  - Cause: two networks. Docker gives the node `172.18.0.2`; the CNI (kindnet) gives pods `10.244.x.x`, and routes to them exist only **inside the node**. `127.0.0.1` is just the laptop talking to itself.
+  - Fix: from outside, use `kubectl port-forward` (listens on `127.0.0.1`) or a Service. From inside, `sudo docker exec lab-control-plane curl ...` works. Building picture: the node is the street address, pods are internal extensions.
+
+* **Said deleting a pod vs stopping its container differ "because a Deployment restarts it"** (24 Nov)
+  - Symptom: my teach-back answer; there was no Deployment today.
+  - Cause: stopping nginx kills the **container**; the **kubelet** on the node restarts it inside the same pod (default `restartPolicy: Always`), so same pod, same IP, `RESTARTS 1`. Deleting the **pod** removes the wrapper, and a bare pod has no controller watching it, so nothing recreates it.
+  - Fix: container restarts = kubelet. Pod recreation = a controller (Deployment, tomorrow).
+
+* **`pod.yaml` first draft** (24 Nov)
+  - Symptom: `error parsing pod.yaml: ... line 9: did not find expected '-' indicator`, then `Error from server (BadRequest): ... unknown field "metadata.label"`, then also `"spec.container"` (a new slip while fixing).
+  - Cause: `image:` and `ports:` were indented under the dash instead of under `name:` (my CI dash lesson again); `label` must be `labels`; `containers` is plural. Two separate checks: **kubectl** parses YAML on the laptop first ("error parsing", nothing sent), then the **API server** rejects unknown fields ("Error from server", all at once).
+  - Fix: keys of one list item line up under the first key after the dash; `kubectl apply --dry-run=server -f` after each single fix. It never complained about `name: web` vs the requested `app: web`: label values are free text, so only a review catches them.
+
 ## README
+
+* **README says the plan goes into every PR** (24 Nov read-through)
+  - Symptom: reading the Workflow section aloud, I realised the plan summary was pasted into a PR only once (`add-counter`, 20 Nov).
+  - Cause: wrote the process as intended, not as done. A one-line summary (`8 to add`) also doesn't show *what* changes.
+  - Fix: later, change the README line to match what happened; from the next Terraform PR on, paste the full plan, masked with `sed`, in a collapsible block.
 
 * **README mistakes caught in review** (17 Nov)
   - Symptom: an SSH clone address (`git@github.com:...`) and a test folder path, `down -v` as the normal stop command, "push the image to main", the Trivy scan missing from both flows, a merge flow labelled "On a PR run", and no reason why a PR doesn't push.
