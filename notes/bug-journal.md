@@ -34,6 +34,11 @@ Format: symptom, cause, fix.
   - Cause: Ctrl-Z **pauses** a program and parks it as a background job; Ctrl-C cancels it.
   - Fix: `jobs` lists it, `kill %1` ends it (or `fg` then Ctrl-C). Use `curl -m 3` so a dead address gives up by itself.
 
+* **`~/Dev/lab` looked root-owned and unreadable after copying it to the desktop** (25 Nov)
+  - Symptom: `ls -la ~/Dev/lab` listed every entry as `---------`, size `0`, owner `root`, and `ls ~/Dev/lab/k8s` said `Permission denied`. I thought the USB copy had made everything root's and ran `sudo chown -R catto: ~/Dev/lab`, which changed nothing.
+  - Cause: `sudo ls -la` showed the truth: everything was already mine. The `lab` directory itself was `rw-r--r--`. On a directory, `r` = list the names, `x` = go in and look them up, `w` = create/rename/delete entries (only together with `x`). With `r` and no `x`, `ls` got the names but couldn't read anything about them, so it printed placeholders. `terraform` was the mirror image, `--x--x--x`: anyone could go in and open a file by its exact name, but nobody could list it. Probably old `chmod` experiments, not the USB (only two folders were hit). At teach-back I still said `rw-` would let me rename things inside.
+  - Fix: `sudo chmod -R u+rwX,go+rX,go-w ~/Dev/lab` → directories `755`, files `644`. Capital `X` adds `x` only to directories and to files that already have it, so plain files never become executable. When `ls` output looks impossible, look with `sudo ls -la` before changing anything.
+
 * **Pasted a placeholder into the terminal** (17 Nov)
   - Symptom: `git clone <your repo's clone URL> /tmp/readme-test` hung and showed `>`.
   - Cause: `<` is a redirect, so the shell waited for input from a file.
@@ -216,6 +221,11 @@ Format: symptom, cause, fix.
   - Symptom: listing Project 1's security decisions, I said the app runs as uid 1001 and that `sudo docker` is rootless.
   - Cause: the same uid slip as before, and I mixed up the two Docker modes. `sudo docker` talks to the root daemon, so it's **rootful**. Rootless was dropped on 26 Oct.
   - Fix: uid **10001**; rootful Docker plus hardened containers. Both are now written in the README's "Security decisions".
+
+* **Docker on the desktop: iptables couldn't create the `nat` chain** (24 Nov, desktop)
+  - Symptom: after `desktop-setup.sh`, Docker failed to start. iptables couldn't make the `nat` `PREROUTING` chain.
+  - Cause: the update installed new kernels and removed the module folder of the kernel that was **still running** (7.2.2). `/usr/lib/modules` only had `6.18.60-3-cachyos-lts` and `7.3.5-2-cachyos`. Each kernel version has its own folder, and the running kernel can only load modules from `/usr/lib/modules/$(uname -r)`, so the netfilter/NAT modules Docker needs couldn't load.
+  - Fix: reboot into the new kernel. Before Docker or kind work after an update: `uname -r` must appear in `ls /usr/lib/modules` (25 Nov: `7.3.5-2-cachyos`, OK). Add that check to `desktop-setup.sh` (parking lot).
 
 ## CI (GitHub Actions)
 
@@ -683,6 +693,51 @@ Format: symptom, cause, fix.
   - Symptom: `error parsing pod.yaml: ... line 9: did not find expected '-' indicator`, then `Error from server (BadRequest): ... unknown field "metadata.label"`, then also `"spec.container"` (a new slip while fixing).
   - Cause: `image:` and `ports:` were indented under the dash instead of under `name:` (my CI dash lesson again); `label` must be `labels`; `containers` is plural. Two separate checks: **kubectl** parses YAML on the laptop first ("error parsing", nothing sent), then the **API server** rejects unknown fields ("Error from server", all at once).
   - Fix: keys of one list item line up under the first key after the dash; `kubectl apply --dry-run=server -f` after each single fix. It never complained about `name: web` vs the requested `app: web`: label values are free text, so only a review catches them.
+
+* **Thought `pod.yaml` made the cluster** (25 Nov)
+  - Symptom: asked whether `pod.yaml` must change to run on the desktop cluster, I said it would have to say it's a cluster (and be renamed `cluster.yaml`). My first `deployment.yaml` had `cluster: lab` as the selector.
+  - Cause: `kind create cluster` makes the cluster. A manifest describes one **object inside** a cluster and never names the cluster. Which cluster it goes to is decided by kubectl: `current-context` in `~/.kube/config` (`kind-lab`).
+  - Fix: the same `pod.yaml` works on any cluster, unchanged. A selector is a **query over pod labels**, so it must match `template.metadata.labels`.
+
+* **Thought `replicas: 3` makes 3 ReplicaSets** (25 Nov)
+  - Symptom: predicted 3 ReplicaSets.
+  - Cause: `replicas` = how many **pods** the ReplicaSet keeps alive. A Deployment makes one ReplicaSet per **version of the pod template**.
+  - Fix: 1 Deployment `web` → 1 ReplicaSet `web-55fbf6bc44` → 3 pods `web-55fbf6bc44-<5 random>`.
+
+* **First `deployment.yaml` still said `apiVersion: v1` and `kind: Pod`** (25 Nov)
+  - Symptom: `Error from server (BadRequest): ... Pod in version "v1" cannot be handled as a Pod: strict decoding error: unknown field "spec.replicas", unknown field "spec.selector", unknown field "spec.template"` (I predicted this one right).
+  - Cause: the top two lines decide the type, so the API server checked my fields against a Pod.
+  - Fix: `apiVersion: apps/v1`, `kind: Deployment`. `apiVersion` = which shelf (API group/version), `kind` = which item on it. Together they name a **type**, never an object.
+
+* **Said kubectl only catches syntax errors** (25 Nov teach-back)
+  - Symptom: "server error = no syntax error but the wrong format; kubectl = syntax error".
+  - Cause: there are **three gates**. (1) kubectl parses the YAML: `error parsing ... line N`. (2) kubectl looks up the type (apiVersion + kind) in the list the API server offers: `Deployment` in `v1` gives `no matches for kind "Deployment" in version "v1"`, nothing sent, even though the YAML is valid. (3) The API server checks the fields for that type (`Error from server ... unknown field`, all at once) and a few values (selector vs template labels). Typos in kubectl itself (`unknown shorthand flag: 'a'`, `unknown command "deployment"`) are also local: nothing sent.
+  - Fix: before fixing, read which gate spoke.
+
+* **Thought a replacement pod keeps the old name and IP** (25 Nov)
+  - Symptom: predicted the same name, same IP and `RESTARTS 1` after deleting one of the Deployment's pods.
+  - Cause: I mixed it up with yesterday's container restart. The ReplicaSet makes a **brand-new pod**: new name ending (`48v27` → `s5h84`), new IP (`.8` → `.9`), `RESTARTS 0`, young `AGE`. An IP belongs to one pod; "shared" means shared by the containers inside it.
+  - Fix: container dies → kubelet restarts it **in the same pod**. Pod dies → ReplicaSet makes a **new pod**.
+
+* **Said "kubectl" restarts containers, and missed the scheduler again** (25 Nov teach-back; control-plane names wrong 3 times now)
+  - Symptom: control plane = etcd, kube-api, "kubectrl (controls the restarting)" and "the two DNS services"; in the next answer, containers are "restarted by kubectl".
+  - Cause: three look-alike names. **kubectl** = my client on the desktop. **kubelet** = the agent on each node that starts and restarts containers. **kube-controller-manager** = control plane, runs controllers such as the ReplicaSet controller that replaces pods. CoreDNS lets pods find Services by name; it's a cluster add-on, not control plane.
+  - Fix: control plane = **kube-apiserver** (the only door), **etcd** (desired state), **kube-scheduler** (picks the node for a new pod), **kube-controller-manager** (the controllers). On the cheat sheet.
+
+* **Said nothing happens when a pod loses its label** (25 Nov teach-back)
+  - Symptom: "unowned pod: nothing is done for it". True for that pod, but I left out the other half.
+  - Cause: `kubectl label pod web-55fbf6bc44-qhg8w app-` took it out of the ReplicaSet's selector (`app=web,pod-template-hash=55fbf6bc44` needs **both**). The ReplicaSet released it (empty `ownerReferences`, now bare, still running), counted 2 and **made a new pod** (`7k4px`) to get back to 3.
+  - Fix: ownership follows the selector. Changing a label can take a pod out of a controller's count, and the controller fills the gap.
+
+* **Thought `kubectl scale` doesn't change the Deployment** (25 Nov)
+  - Symptom: "it changes the replica only since nothing about the deploy changes".
+  - Cause: `scale` writes `spec.replicas` **on the Deployment**, and the Deployment controller then sets the ReplicaSet's `DESIRED`. The **template** didn't change, so it's the same hash and the same ReplicaSet.
+  - Fix: `kubectl apply -f deployment.yaml` afterwards said `configured` and went back to 3 (it removed the two newest pods): drift, fixed from the file. Change `replicas` in the YAML, not by hand.
+
+* **Cleanup deleted the wrong pod** (25 Nov)
+  - Symptom: I deleted `web-55fbf6bc44-s5h84` (owned) instead of the bare `web-55fbf6bc44-qhg8w`. `kclrj` replaced it within seconds, and `qhg8w` kept running.
+  - Cause: generated names look alike, and the bare pod keeps its old name.
+  - Fix: `kubectl get pods --show-labels` first; the bare one is the one without `app=web`. Copy names, don't retype them.
 
 ## README
 
