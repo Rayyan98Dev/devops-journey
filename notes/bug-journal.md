@@ -39,6 +39,11 @@ Format: symptom, cause, fix.
   - Cause: `sudo ls -la` showed the truth: everything was already mine. The `lab` directory itself was `rw-r--r--`. On a directory, `r` = list the names, `x` = go in and look them up, `w` = create/rename/delete entries (only together with `x`). With `r` and no `x`, `ls` got the names but couldn't read anything about them, so it printed placeholders. `terraform` was the mirror image, `--x--x--x`: anyone could go in and open a file by its exact name, but nobody could list it. Probably old `chmod` experiments, not the USB (only two folders were hit). At teach-back I still said `rw-` would let me rename things inside.
   - Fix: `sudo chmod -R u+rwX,go+rX,go-w ~/Dev/lab` → directories `755`, files `644`. Capital `X` adds `x` only to directories and to files that already have it, so plain files never become executable. When `ls` output looks impossible, look with `sudo ls -la` before changing anything.
 
+* **A dummy secret typed on the command line ended up in fish's history, and every delete leaked it again** (26 Nov)
+  - Symptom: `history search banana` found `kubectl create secret ... --from-literal=API_KEY=banana-123`. Each `history delete --exact '...banana-123...'` I ran became a new history line containing the value. `history delete --contains` gave `builtin history delete only supports --exact`.
+  - Cause: the shell saves every command line, secrets included. A delete command that quotes the old line contains the secret itself. A command starting with a space isn't saved, but I typed them without the space.
+  - Fix: never type a real secret: `kubectl create secret generic NAME --from-file=KEY=/path/outside/repo`, then delete the file. To clean up without typing the word: `for c in (builtin history search --contains 'bana''na'); builtin history delete --exact --case-sensitive -- $c; end` (fish joins `'bana''na'` only when it runs).
+
 * **Pasted a placeholder into the terminal** (17 Nov)
   - Symptom: `git clone <your repo's clone URL> /tmp/readme-test` hung and showed `>`.
   - Cause: `<` is a redirect, so the shell waited for input from a file.
@@ -722,7 +727,8 @@ Format: symptom, cause, fix.
 * **Said "kubectl" restarts containers, and missed the scheduler again** (25 Nov teach-back; control-plane names wrong 3 times now)
   - Symptom: control plane = etcd, kube-api, "kubectrl (controls the restarting)" and "the two DNS services"; in the next answer, containers are "restarted by kubectl".
   - Cause: three look-alike names. **kubectl** = my client on the desktop. **kubelet** = the agent on each node that starts and restarts containers. **kube-controller-manager** = control plane, runs controllers such as the ReplicaSet controller that replaces pods. CoreDNS lets pods find Services by name; it's a cluster add-on, not control plane.
-  - Fix: control plane = **kube-apiserver** (the only door), **etcd** (desired state), **kube-scheduler** (picks the node for a new pod), **kube-controller-manager** (the controllers). On the cheat sheet.
+  - Fix: control plane = **kube-apiserver** (the only door), **etcd** (desired state), **kube-scheduler** (picks the node for a new pod), **kube-controller-manager** (the controllers). On the cheat sheet. Mnemonic **ACES**: API server, Controller-manager, Etcd, Scheduler.
+  - **Again 26 Nov:** quiz still listed CoreDNS and missed the scheduler (4th time); at teach-back I said the **kubelet** looks up the type in gate 2 (it's **kubectl**), and that the API server turns `web` into an IP (it's **CoreDNS**; the API server only hands out the Service's IP).
 
 * **Said nothing happens when a pod loses its label** (25 Nov teach-back)
   - Symptom: "unowned pod: nothing is done for it". True for that pod, but I left out the other half.
@@ -738,6 +744,46 @@ Format: symptom, cause, fix.
   - Symptom: I deleted `web-55fbf6bc44-s5h84` (owned) instead of the bare `web-55fbf6bc44-qhg8w`. `kclrj` replaced it within seconds, and `qhg8w` kept running.
   - Cause: generated names look alike, and the bare pod keeps its old name.
   - Fix: `kubectl get pods --show-labels` first; the bare one is the one without `app=web`. Copy names, don't retype them.
+
+* **Thought a bad image tag fails at gate 3** (26 Nov)
+  - Symptom: predicted `apply` of `nginx:no-such-tag` would be rejected by the API server.
+  - Cause: no gate checks that an image **exists**. The tag is just a text value, so `apply` said `configured`; the new pod went `ErrImagePull` → `ImagePullBackOff`, the 3 old pods kept serving (`maxUnavailable` rounds down to 0), and `rollout status` hung.
+  - Fix: `kubectl rollout undo deployment web`. Undo copies the old template forward as a **new revision** (history went 2, 3, 5, 6) and warns that the last-applied copy isn't updated: **after an undo, fix the file**, or the next `apply` breaks it again. `kubectl diff -f` shows what an apply would change (Kubernetes' `terraform plan`). I also made a typo in the first image tag and had to undo that too.
+
+* **Service: four wrong assumptions** (26 Nov)
+  - Symptom: I predicted the Service would take a pod IP, `curl <service IP>` would work from the desktop, `curl http://web` wouldn't work inside the cluster, and kubectl would catch a selector of `app: webb`.
+  - Cause: the Service IP (`10.96.42.19`) comes from a separate **Service range**; it's virtual, and the endpoints are the pod IPs (`10.244.x`). It exists only as rules inside the node (kube-proxy), so the desktop can't reach it (timed out). **CoreDNS** (`10.96.0.10`) turns `web` into `web.default.svc.cluster.local` → the Service IP. A wrong selector value is valid text: the Service is created with **0 endpoints** and no error.
+  - Fix: check `kubectl get endpointslices -l kubernetes.io/service-name=web` after every Service. From outside use `port-forward` or NodePort.
+
+* **First `service.yaml`: values copied from the docs example** (26 Nov)
+  - Symptom: `selector: app.kubernetes.io/name: web` and `targetPort: 9376`. Then I asked if the fix was `matchLabels: app: web`.
+  - Cause: the shape was right, the values were the example's, not my app's. A Service's selector is a plain label list (`selector:` → `app: web`), unlike a Deployment's `selector.matchLabels`.
+  - Fix: `selector: app: web`, `targetPort: 80` (what nginx listens on).
+
+* **NodePort: predicted neither address would work from the desktop** (26 Nov)
+  - Symptom: `curl 127.0.0.1:30080` failed (right), but `curl 172.18.0.2:30080` returned nginx.
+  - Cause: on Linux the desktop is on the Docker network itself (it has `172.18.0.1`), so it reaches the node container's IP. The NodePort opens on the **node**, not on my desktop's own addresses. Pod IPs stay unreachable: `10.244.x` lives inside the node.
+  - Fix: node IP + NodePort works from this desktop only. `localhost` would need kind's `extraPortMappings` (parking lot).
+
+* **Thought `port-forward svc/web` spreads requests across pods** (26 Nov)
+  - Symptom: `logs -l app=web --prefix` showed all three `curl`s on `web-77848b4dc6-gzqdd`.
+  - Cause: port-forward looks up the Service's endpoints once, picks **one pod** and tunnels to it. nginx logs the client as `127.0.0.1` because the tunnel comes out inside the pod.
+  - Fix: port-forward is a developer tool, not a load-balancing test.
+
+* **ConfigMap: thought the env var updates too, and typed `GRERTING`** (26 Nov)
+  - Symptom: predicted `GREETING` would change in running pods after editing the ConfigMap; my `configMapKeyRef` had `key: GRERTING` (caught before apply).
+  - Cause: env vars are read **once**, when the container starts; mounted files are re-synced by the kubelet (about a minute) and nginx reads `index.html` on every request. Keys are case sensitive, and a missing key would leave the new pod in `CreateContainerConfigError`. Also: a volume mount **hides** what the image had in that folder (no `50x.html`), and each key becomes a file.
+  - Fix: `kubectl rollout restart deployment web` (new ReplicaSet) to pick up env changes. Copy key names, don't retype.
+
+* **`deployment.apps/web unchanged` after adding the Secret mount** (26 Nov)
+  - Symptom: no `/run/secrets/API_KEY`, and `df` showed `overlay`.
+  - Cause: the edit wasn't saved to disk, so apply had nothing to change (same lesson as the empty Dockerfile).
+  - Fix: `grep -n -A3 secret deployment.yaml` before applying; `unchanged` after an edit means the file didn't change.
+
+* **Secret mounted read-only at `/run/secrets`: `RunContainerError`** (26 Nov)
+  - Symptom: the new pod crash-looped (`RESTARTS 4`); the 3 old pods kept serving. `describe` Events: `make mountpoint "/var/run/secrets/kubernetes.io/serviceaccount": mkdirat .../rootfs/run/secrets/kubernetes.io: read-only file system`.
+  - Cause: every pod gets a service-account token mounted at `/var/run/secrets/kubernetes.io/serviceaccount`. In Alpine `/var/run` is a link to `/run`, so that path was **inside** my read-only mount, and the runtime couldn't create the folder.
+  - Fix: `mountPath: /etc/web-secret` → `cat` gave `banana-123` (decoded by the kubelet), `df` showed `tmpfs` (memory). Don't mount over paths the system uses. Found by reading the error word for word and testing a guess.
 
 ## README
 
